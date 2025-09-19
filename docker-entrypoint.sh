@@ -1,64 +1,57 @@
-#!/bin/bash
-# Script de inicialização que roda migrations e inicia a aplicação
+#!/bin/sh
+# Script de inicialização do container Docker para sistema-financas
 
-set -e  # Para o script se houver erro
+echo "🚀 Iniciando Sistema Finanças Backend..."
 
-echo "🚀 Iniciando Sistema Finanças..."
-echo "========================================="
-
-# Função para verificar conexão com banco
-check_database() {
-    echo "📊 Verificando conexão com banco de dados..."
-    
-    # Tenta conectar até 30 vezes (30 segundos)
-    for i in $(seq 1 30); do
-        if npx prisma db execute --stdin --schema=./prisma/schema.prisma <<< "SELECT 1" > /dev/null 2>&1; then
-            echo "✅ Banco de dados conectado!"
-            return 0
-        fi
-        echo "⏳ Aguardando banco de dados... tentativa $i/30"
-        sleep 1
-    done
-    
-    echo "❌ Falha ao conectar no banco de dados após 30 tentativas"
-    return 1
-}
-
-# Verifica se DATABASE_URL está configurada
+# Verifica se a variável DATABASE_URL está definida
 if [ -z "$DATABASE_URL" ]; then
-    echo "❌ ERRO CRÍTICO: DATABASE_URL não está configurada!"
-    echo "Configure a variável DATABASE_URL no painel do Coolify:"
-    echo "Exemplo: postgresql://usuario:senha@host:5432/database"
-    echo "========================================="
+    echo "❌ Erro: DATABASE_URL não está definida"
     exit 1
 fi
 
-echo "✅ DATABASE_URL encontrada"
+echo "📦 Executando migrations do Prisma..."
 
-# Aguarda o banco de dados estar pronto
-check_database || exit 1
+# Executa as migrations do banco de dados
+npx prisma migrate deploy
 
-# Executa migrations do Prisma
-echo "📦 Executando migrations do banco de dados..."
-if npx prisma migrate deploy; then
-    echo "✅ Migrations executadas com sucesso!"
-else
-    echo "⚠️  Aviso: Falha ao executar migrations"
-    echo "Tentando continuar mesmo assim..."
+# Verifica se as migrations foram executadas com sucesso
+if [ $? -ne 0 ]; then
+    echo "⚠️  Aviso: Migrations falharam ou já estão atualizadas"
+    # Continua mesmo se falhar, pois pode ser que as migrations já foram aplicadas
 fi
 
-# Gera o cliente Prisma (por garantia)
-echo "🔧 Verificando cliente Prisma..."
+# Gera o cliente Prisma (por segurança)
+echo "🔧 Gerando cliente Prisma..."
 npx prisma generate
 
-echo "========================================="
-echo "✨ Iniciando aplicação na porta $PORT..."
-echo "========================================="
+echo "✅ Configuração concluída!"
+echo "🎯 Iniciando servidor na porta $PORT..."
 
-# Inicia a aplicação
-# Para Next.js:
-exec npm start
-# Para Node.js/Express com PM2:
-# exec npx pm2-runtime start ecosystem.config.js
-# Para Node.js puro:
-# exec node index.js
+# Inicia a aplicação baseada no que existe
+# Verifica se existe arquivo principal
+if [ -f "index.js" ]; then
+    echo "📱 Iniciando com index.js"
+    node index.js
+elif [ -f "server.js" ]; then
+    echo "📱 Iniciando com server.js"
+    node server.js
+elif [ -f "app.js" ]; then
+    echo "📱 Iniciando com app.js"
+    node app.js
+elif [ -f "src/index.js" ]; then
+    echo "📱 Iniciando com src/index.js"
+    node src/index.js
+elif [ -f "src/server.js" ]; then
+    echo "📱 Iniciando com src/server.js"
+    node src/server.js
+elif [ -f "dist/index.js" ]; then
+    echo "📱 Iniciando com dist/index.js"
+    node dist/index.js
+elif [ -f "build/index.js" ]; then
+    echo "📱 Iniciando com build/index.js"
+    node build/index.js
+else
+    # Fallback para npm start
+    echo "📱 Iniciando com npm start"
+    npm start
+fi
