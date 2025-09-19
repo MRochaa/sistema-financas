@@ -18,6 +18,10 @@ export default defineConfig({
     host: true,
     port: 5173,
   },
+  build: {
+    outDir: 'dist',
+    assetsDir: 'assets',
+  },
   optimizeDeps: {
     exclude: ['lucide-react'],
   },
