@@ -1,45 +1,25 @@
 version: '3.8'
 
 services:
-  # Serviço do banco de dados PostgreSQL
-  postgres:
-    image: postgres:15-alpine
-    container_name: sistema-financas-db
-    environment:
-      # Configurações do banco de dados
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: sua_senha_aqui # MUDE ISSO!
-      POSTGRES_DB: sistema_financas
-    ports:
-      - "5432:5432"
-    volumes:
-      # Persiste os dados do banco
-      - postgres_data:/var/lib/postgresql/data
-    networks:
-      - app-network
-
-  # Serviço da aplicação
+  # Aplicação completa (frontend + backend)
   app:
     build: 
       context: .
       dockerfile: Dockerfile
-    container_name: sistema-financas-app
+    container_name: sistema-financas
     environment:
-      # URL de conexão com o banco de dados
-      DATABASE_URL: "postgresql://postgres:sua_senha_aqui@postgres:5432/sistema_financas?schema=public"
-      # Adicione outras variáveis de ambiente necessárias aqui
+      # Variáveis do backend
+      DATABASE_URL: ${DATABASE_URL}
+      JWT_SECRET: ${JWT_SECRET}
       NODE_ENV: production
+      PORT: 3001
+      FRONTEND_URL: ${FRONTEND_URL}
     ports:
-      - "3000:3000"
-    depends_on:
-      - postgres
-    networks:
-      - app-network
+      - "80:80"  # Nginx serve tudo na porta 80
     restart: unless-stopped
-
-volumes:
-  postgres_data:
+    networks:
+      - coolify
 
 networks:
-  app-network:
-    driver: bridge
+  coolify:
+    external: true
