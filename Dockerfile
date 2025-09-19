@@ -8,9 +8,8 @@ RUN apk add --no-cache openssl openssl-dev libc6-compat python3 make g++
 
 WORKDIR /app
 
-# Copia arquivos de dependências
-COPY package*.json ./
-COPY prisma ./prisma/
+# Copia arquivos de dependências do backend
+COPY backend/package*.json ./
 
 # Instala todas as dependências (incluindo devDependencies para o build)
 RUN npm ci
@@ -27,13 +26,15 @@ WORKDIR /app
 
 # Copia dependências instaladas do estágio anterior
 COPY --from=deps /app/node_modules ./node_modules
-COPY . .
+
+# Copia todo o código do backend
+COPY backend/ ./
 
 # Gera o cliente Prisma
 RUN npx prisma generate
 
-# Build da aplicação (ajuste se não for Next.js)
-RUN npm run build
+# Build da aplicação (se houver script de build)
+RUN if grep -q '"build"' package.json; then npm run build; fi
 
 # Remove devDependencies para reduzir tamanho
 RUN npm prune --production
@@ -50,24 +51,30 @@ WORKDIR /app
 
 # Cria grupo e usuário não-root para segurança
 RUN addgroup -g 1001 -S nodejs && \
-    adduser -S nextjs -u 1001
+    adduser -S nodejs -u 1001
 
 # Copia arquivos necessários do estágio de build
-COPY --from=builder /app/public ./public
-COPY --from=builder /app/package*.json ./
-COPY --from=builder /app/node_modules ./node_modules
-COPY --from=builder /app/prisma ./prisma
+COPY --from=builder --chown=nodejs:nodejs /app/package*.json ./
+COPY --from=builder --chown=nodejs:nodejs /app/node_modules ./node_modules
+COPY --from=builder --chown=nodejs:nodejs /app/prisma ./prisma
 
-# Copia a build da aplicação (ajuste conforme seu framework)
-# Para Next.js:
-COPY --from=builder /app/.next ./.next
-# Para Node.js puro ou Express:
-# COPY --from=builder /app/dist ./dist
-# ou
-# COPY --from=builder /app/build ./build
+# Copia o código da aplicação
+# Se for uma aplicação Node.js/Express tradicional
+COPY --from=builder --chown=nodejs:nodejs /app/*.js ./
+COPY --from=builder --chown=nodejs:nodejs /app/src ./src
+COPY --from=builder --chown=nodejs:nodejs /app/routes ./routes
+COPY --from=builder --chown=nodejs:nodejs /app/controllers ./controllers
+COPY --from=builder --chown=nodejs:nodejs /app/models ./models
+COPY --from=builder --chown=nodejs:nodejs /app/middlewares ./middlewares
+COPY --from=builder --chown=nodejs:nodejs /app/config ./config
+COPY --from=builder --chown=nodejs:nodejs /app/utils ./utils
+
+# Se tiver build compilada
+COPY --from=builder --chown=nodejs:nodejs /app/dist ./dist
+COPY --from=builder --chown=nodejs:nodejs /app/build ./build
 
 # Copia o script de inicialização
-COPY --chown=nextjs:nodejs docker-entrypoint.sh ./
+COPY --chown=nodejs:nodejs docker-entrypoint.sh ./
 
 # Torna o script executável
 RUN chmod +x docker-entrypoint.sh
@@ -79,8 +86,12 @@ ENV PORT=3000
 # Expõe a porta da aplicação
 EXPOSE 3000
 
+# Health check para verificar se a aplicação está rodando
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
+  CMD curl -f http://localhost:3000/health || exit 1
+
 # Muda para usuário não-root
-USER nextjs
+USER nodejs
 
 # Script de entrada que executa migrations e inicia a app
 ENTRYPOINT ["./docker-entrypoint.sh"]
