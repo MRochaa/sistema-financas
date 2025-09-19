@@ -17,41 +17,22 @@ npx prisma migrate deploy
 # Verifica se as migrations foram executadas com sucesso
 if [ $? -ne 0 ]; then
     echo "⚠️  Aviso: Migrations falharam ou já estão atualizadas"
-    # Continua mesmo se falhar, pois pode ser que as migrations já foram aplicadas
+    echo "🔄 Tentando gerar cliente Prisma mesmo assim..."
 fi
 
 # Gera o cliente Prisma (por segurança)
 echo "🔧 Gerando cliente Prisma..."
 npx prisma generate
 
+# Executa seed se for primeira vez (opcional)
+if [ "$RUN_SEED" = "true" ]; then
+    echo "🌱 Executando seed do banco de dados..."
+    node src/seed.js
+fi
+
 echo "✅ Configuração concluída!"
 echo "🎯 Iniciando servidor na porta $PORT..."
 
-# Inicia a aplicação baseada no que existe
-# Verifica se existe arquivo principal
-if [ -f "index.js" ]; then
-    echo "📱 Iniciando com index.js"
-    node index.js
-elif [ -f "server.js" ]; then
-    echo "📱 Iniciando com server.js"
-    node server.js
-elif [ -f "app.js" ]; then
-    echo "📱 Iniciando com app.js"
-    node app.js
-elif [ -f "src/index.js" ]; then
-    echo "📱 Iniciando com src/index.js"
-    node src/index.js
-elif [ -f "src/server.js" ]; then
-    echo "📱 Iniciando com src/server.js"
-    node src/server.js
-elif [ -f "dist/index.js" ]; then
-    echo "📱 Iniciando com dist/index.js"
-    node dist/index.js
-elif [ -f "build/index.js" ]; then
-    echo "📱 Iniciando com build/index.js"
-    node build/index.js
-else
-    # Fallback para npm start
-    echo "📱 Iniciando com npm start"
-    npm start
-fi
+# Inicia a aplicação com o arquivo correto
+# O projeto usa type: module e src/server.js como arquivo principal
+node src/server.js
