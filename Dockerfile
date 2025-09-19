@@ -1,67 +1,52 @@
-# Multi-stage build for production optimization
-FROM node:18-alpine AS base
+# Estágio de build - onde compilamos a aplicação
+FROM node:18-alpine AS builder
 
-# Install security updates
-RUN apk update && apk upgrade && apk add --no-cache dumb-init
+# Instala as dependências necessárias para o Prisma
+RUN apk add --no-cache openssl openssl-dev libc6-compat
 
-# Create app directory with proper permissions
-RUN addgroup -g 1001 -S nodejs
-RUN adduser -S nextjs -u 1001
 WORKDIR /app
-RUN chown nextjs:nodejs /app
 
-# Frontend build stage
-FROM base AS frontend-deps
-WORKDIR /app
+# Copia os arquivos de dependências
 COPY package*.json ./
-RUN npm ci --only=production && npm cache clean --force
+COPY prisma ./prisma/
 
-FROM base AS frontend-builder
-WORKDIR /app
-COPY package*.json ./
+# Instala as dependências
 RUN npm ci
+
+# Copia o resto do código
 COPY . .
-RUN npm run build
 
-# Backend build stage
-FROM base AS backend-deps
-WORKDIR /app
-COPY backend/package*.json ./
-RUN npm ci --only=production && npm cache clean --force
-
-FROM base AS backend-builder
-WORKDIR /app
-COPY backend/package*.json ./
-RUN npm ci
-COPY backend/ .
+# Gera o cliente do Prisma
 RUN npx prisma generate
 
-# Production stage
-FROM base AS production
+# Compila a aplicação (se for Next.js ou similar)
+RUN npm run build
+
+# Estágio de produção - imagem final otimizada
+FROM node:18-alpine AS runner
+
+# Instala OpenSSL e curl para healthcheck
+RUN apk add --no-cache openssl curl
+
 WORKDIR /app
 
-# Copy backend dependencies and code
-COPY --from=backend-deps --chown=nextjs:nodejs /app/node_modules ./node_modules
-COPY --from=backend-builder --chown=nextjs:nodejs /app .
+# Cria usuário não-root para segurança
+RUN addgroup -g 1001 -S nodejs
+RUN adduser -S nextjs -u 1001
 
-# Copy frontend build
-COPY --from=frontend-builder --chown=nextjs:nodejs /app/dist ./public
+# Copia os arquivos necessários do estágio de build
+COPY --from=builder /app/package*.json ./
+COPY --from=builder /app/node_modules ./node_modules
+COPY --from=builder /app/prisma ./prisma
+COPY --from=builder /app/public ./public
+COPY --from=builder /app/.next ./.next
+# Se não for Next.js, ajuste as pastas acima conforme seu projeto
 
-# Create logs directory
-RUN mkdir -p /app/logs && chown nextjs:nodejs /app/logs
-
-# Switch to non-root user
+# Define o usuário para executar a aplicação
 USER nextjs
 
-# Health check
-HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-  CMD node -e "require('http').get('http://localhost:3001/health', (res) => { process.exit(res.statusCode === 200 ? 0 : 1) })"
+# Porta que a aplicação vai usar
+EXPOSE 3000
 
-# Expose port
-EXPOSE 3001
-
-# Use dumb-init to handle signals properly
-ENTRYPOINT ["dumb-init", "--"]
-
-# Start the application
-CMD ["sh", "-c", "npx prisma migrate deploy && npx prisma db seed && npm start"]
+# Comando para iniciar a aplicação
+CMD ["npm", "start"]
