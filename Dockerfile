@@ -52,101 +52,12 @@ COPY --from=backend-builder /app /app/backend
 # Copia o frontend buildado para o Nginx
 COPY --from=frontend-builder /app/frontend/dist /usr/share/nginx/html
 
-# Copia script de inicialização do backend
-COPY docker-entrypoint.sh /app/docker-entrypoint.sh
-RUN chmod +x /app/docker-entrypoint.sh
+# Copia configuração do Nginx
+COPY nginx.conf /etc/nginx/conf.d/default.conf
 
-# Cria configuração do Nginx que serve frontend e proxy para backend
-RUN cat > /etc/nginx/conf.d/default.conf << 'EOF'
-server {
-    listen 80;
-    server_name _;
-    
-    # Serve o frontend React
-    root /usr/share/nginx/html;
-    index index.html;
-    
-    # Configurações de segurança
-    add_header X-Frame-Options "SAMEORIGIN" always;
-    add_header X-Content-Type-Options "nosniff" always;
-    add_header X-XSS-Protection "1; mode=block" always;
-    
-    # Proxy para API backend
-    location /api/ {
-        proxy_pass http://localhost:3001/api/;
-        proxy_http_version 1.1;
-        proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection 'upgrade';
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-        proxy_cache_bypass $http_upgrade;
-        
-        # Timeouts
-        proxy_connect_timeout 60s;
-        proxy_send_timeout 60s;
-        proxy_read_timeout 60s;
-    }
-    
-    # Health check endpoint do backend
-    location /health {
-        proxy_pass http://localhost:3001/health;
-        access_log off;
-    }
-    
-    # Roteamento do React (SPA)
-    location / {
-        try_files $uri $uri/ /index.html;
-    }
-    
-    # Cache de assets estáticos
-    location ~* \.(js|css|png|jpg|jpeg|gif|ico|svg|woff|woff2|ttf|eot)$ {
-        expires 1y;
-        add_header Cache-Control "public, immutable";
-    }
-}
-EOF
-
-# Script de inicialização que roda backend e nginx
-RUN cat > /start.sh << 'EOF'
-#!/bin/bash
-
-echo "🚀 Iniciando Sistema Finanças..."
-
-# Inicia o backend em background
-cd /app/backend
-
-# Executa migrations
-echo "📦 Executando migrations..."
-npx prisma migrate deploy || echo "⚠️  Migrations já aplicadas ou erro"
-
-# Gera cliente Prisma
-echo "🔧 Gerando cliente Prisma..."
-npx prisma generate
-
-# Inicia o backend
-echo "🎯 Iniciando backend na porta 3001..."
-node src/server.js &
-
-# Aguarda o backend iniciar
-echo "⏳ Aguardando backend inicializar..."
-sleep 5
-
-# Verifica se backend está rodando
-until curl -f http://localhost:3001/health > /dev/null 2>&1; do
-    echo "⏳ Backend ainda iniciando..."
-    sleep 2
-done
-
-echo "✅ Backend rodando!"
-
-# Inicia o Nginx em foreground
-echo "🌐 Iniciando Nginx..."
-nginx -g 'daemon off;'
-EOF
-
-RUN chmod +x /start.sh
+# Copia script de inicialização
+COPY start.sh /app/start.sh
+RUN chmod +x /app/start.sh
 
 # Expõe porta 80 (Nginx serve tudo)
 EXPOSE 80
@@ -156,4 +67,4 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
     CMD curl -f http://localhost/health || exit 1
 
 # Comando de inicialização
-CMD ["/start.sh"]
+CMD ["/app/start.sh"]
