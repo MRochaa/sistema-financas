@@ -1,7 +1,9 @@
 #!/bin/bash
 
-# Script de inicialização do container
-# Este script inicia o backend Node.js e o Nginx para servir o frontend
+# ============================================
+# Script de inicialização do container Docker
+# Sistema de Finanças Familiares
+# ============================================
 
 echo "🚀 Iniciando Sistema Financeiro..."
 
@@ -18,16 +20,33 @@ npx prisma migrate deploy 2>/dev/null || echo "⚠️ Migrações já aplicadas 
 
 # Inicia o backend em background
 echo "🔧 Iniciando servidor backend na porta $PORT..."
-node server.js &
+# CORREÇÃO: Usar o caminho correto src/server.js
+node src/server.js &
 
-# Aguarda o backend iniciar
-sleep 5
+# Aguarda o backend iniciar (aumentando tempo para garantir)
+echo "⏳ Aguardando backend inicializar..."
+sleep 10
 
 # Verifica se o backend está rodando
-if curl -f http://localhost:$PORT/health 2>/dev/null; then
-    echo "✅ Backend iniciado com sucesso!"
-else
-    echo "⚠️ Backend ainda iniciando..."
+MAX_ATTEMPTS=10
+ATTEMPT=0
+
+while [ $ATTEMPT -lt $MAX_ATTEMPTS ]; do
+    if curl -f http://localhost:$PORT/health 2>/dev/null; then
+        echo "✅ Backend iniciado com sucesso!"
+        break
+    else
+        echo "⚠️ Tentativa $((ATTEMPT+1)) de $MAX_ATTEMPTS - Backend ainda iniciando..."
+        sleep 2
+    fi
+    ATTEMPT=$((ATTEMPT+1))
+done
+
+if [ $ATTEMPT -eq $MAX_ATTEMPTS ]; then
+    echo "❌ Backend falhou ao iniciar após $MAX_ATTEMPTS tentativas"
+    echo "📋 Logs do backend:"
+    # Mostra logs para debug se houver falha
+    tail -n 50 /var/log/backend.log 2>/dev/null || echo "Sem logs disponíveis"
 fi
 
 # Inicia o Nginx em foreground
