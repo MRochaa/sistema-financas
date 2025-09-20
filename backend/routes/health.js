@@ -1,16 +1,17 @@
 /**
  * Rota de health check para monitoramento do container
  * Verifica se a API está respondendo e se o banco está acessível
+ * Compatível com ESM (módulos ES6)
  */
 
-const express = require('express');
-const router = express.Router();
-const { PrismaClient } = require('@prisma/client');
+import express from 'express';
+import { PrismaClient } from '@prisma/client';
 
+const router = express.Router();
 const prisma = new PrismaClient();
 
 // GET /health - Verifica saúde da aplicação
-router.get('/health', async (req, res) => {
+router.get('/', async (req, res) => {
   try {
     // Testa conexão com banco de dados
     await prisma.$queryRaw`SELECT 1`;
@@ -28,9 +29,9 @@ router.get('/health', async (req, res) => {
   } catch (error) {
     console.error('Health check - Database error:', error);
     
-    // Mesmo com erro no banco, retorna 200 para manter container rodando
-    res.status(200).json({
-      status: 'degraded',
+    // Retorna 503 quando o banco não está disponível
+    res.status(503).json({
+      status: 'unhealthy',
       service: 'sistema-financas-backend',
       timestamp: new Date().toISOString(),
       uptime: process.uptime(),
@@ -41,4 +42,4 @@ router.get('/health', async (req, res) => {
   }
 });
 
-module.exports = router;
+export default router;
