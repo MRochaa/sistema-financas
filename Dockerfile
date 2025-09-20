@@ -1,19 +1,18 @@
 # ============================================
-# ESTÁGIO 1: Build do Frontend React
+# ESTÁGIO 1: Build do Frontend
 # ============================================
 FROM node:20-alpine AS frontend-builder
 
-# Define diretório de trabalho
 WORKDIR /app
 
-# Copia arquivos de configuração do frontend
+# Copia apenas package files primeiro (cache de camadas)
 COPY frontend/package*.json ./frontend/
 
 # Instala dependências do frontend
 WORKDIR /app/frontend
-RUN npm install
+RUN npm ci --only=production
 
-# Copia código do frontend
+# Copia código fonte do frontend
 WORKDIR /app
 COPY frontend/ ./frontend/
 
@@ -26,80 +25,69 @@ RUN npm run build
 # ============================================
 FROM node:20-alpine AS backend-builder
 
-# Instala dependências do sistema necessárias para o Prisma
-RUN apk add --no-cache openssl openssl-dev libc6-compat python3 make g++
+# Instala dependências do sistema para Prisma
+RUN apk add --no-cache openssl libc6-compat
 
-# Define diretório de trabalho
 WORKDIR /app
 
-# Copia arquivos de configuração do backend
+# Copia package files
 COPY backend/package*.json ./
 
-# Instala todas as dependências
-RUN npm install
+# Instala TODAS as dependências (necessário para Prisma)
+RUN npm ci
 
-# Copia todo código do backend
+# Copia código do backend
 COPY backend/ ./
 
-# Gera cliente Prisma
+# Gera Prisma client
 RUN npx prisma generate
 
-# Remove dependências de desenvolvimento para produção
-RUN npm prune --omit=dev
+# Remove devDependencies para produção
+RUN npm prune --production
 
 # ============================================
-# ESTÁGIO 3: Imagem Final com Nginx
+# ESTÁGIO 3: Imagem Final
 # ============================================
-FROM nginx:alpine
+FROM node:20-alpine
 
-# Instala Node.js 20, OpenSSL e outras dependências necessárias
-RUN apk add --no-cache nodejs npm openssl curl bash procps && \
-    node --version && \
-    npm --version
+# Instala dependências necessárias
+RUN apk add --no-cache \
+    nginx \
+    curl \
+    bash \
+    openssl \
+    && rm -rf /var/cache/apk/*
 
-# Cria usuário não-root para segurança
-RUN addgroup -g 1000 -S appgroup && \
-    adduser -u 1000 -S appuser -G appgroup
-
-# Cria diretório de trabalho
+# Cria diretórios necessários
 WORKDIR /app
+RUN mkdir -p /var/log/nginx /var/cache/nginx /var/run
 
-# Copia o backend buildado (mantém estrutura de diretórios)
-COPY --from=backend-builder --chown=appuser:appgroup /app /app/backend
+# Copia backend do estágio de build
+COPY --from=backend-builder /app /app/backend
 
-# Copia o frontend buildado para o Nginx
+# Copia frontend buildado
 COPY --from=frontend-builder /app/frontend/dist /usr/share/nginx/html
 
 # Copia configuração do Nginx
 COPY nginx.conf /etc/nginx/conf.d/default.conf
 
-# Copia script de inicialização
+# Remove configuração padrão do Nginx se existir
+RUN rm -f /etc/nginx/sites-enabled/default
+
+# Copia e configura script de inicialização
 COPY start.sh /app/start.sh
 RUN chmod +x /app/start.sh
 
-# Cria diretório para logs com permissões corretas
-RUN mkdir -p /var/log && \
-    touch /var/log/backend.log && \
-    chown appuser:appgroup /var/log/backend.log && \
-    mkdir -p /var/run && \
-    chown appuser:appgroup /var/run
+# Variáveis de ambiente padrão
+ENV NODE_ENV=production \
+    PORT=3001
 
-# Ajusta permissões do Nginx
-RUN chown -R appuser:appgroup /var/cache/nginx && \
-    chown -R appuser:appgroup /var/log/nginx && \
-    chown -R appuser:appgroup /etc/nginx/conf.d && \
-    touch /var/run/nginx.pid && \
-    chown appuser:appgroup /var/run/nginx.pid
-
-# Expõe porta 80 (Nginx serve tudo)
+# Expõe porta 80
 EXPOSE 80
 
-# Health check mais robusto
-HEALTHCHECK --interval=30s --timeout=10s --start-period=120s --retries=5 \
+# Health check com timeout maior
+HEALTHCHECK --interval=30s --timeout=15s --start-period=60s --retries=5 \
     CMD curl -f http://localhost/health || exit 1
-
-# Muda para usuário não-root
-USER appuser
 
 # Comando de inicialização
 CMD ["/app/start.sh"]
