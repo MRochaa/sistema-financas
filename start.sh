@@ -1,105 +1,73 @@
-#!/bin/bash
-set -e  # Para no primeiro erro
+#!/bin/sh
+# Script de inicialização robusto para o container
 
-# ============================================
-# Script de inicialização do container Docker
-# Sistema de Finanças Familiares
-# ============================================
+echo "========================================"
+echo "🚀 Sistema Financeiro - Inicialização"
+echo "========================================"
 
-echo "🚀 Iniciando Sistema Financeiro..."
-
-# Define variáveis de ambiente padrão se não estiverem definidas
+# Configurações de ambiente
 export NODE_ENV=${NODE_ENV:-production}
 export PORT=${PORT:-3001}
 
-# Verifica se os diretórios existem
-if [ ! -d "/app/backend" ]; then
-    echo "❌ Erro: Diretório backend não encontrado"
-    exit 1
-fi
-
-if [ ! -d "/usr/share/nginx/html" ]; then
-    echo "❌ Erro: Diretório frontend não encontrado"
-    exit 1
-fi
-
-# Navega para o diretório do backend
-cd /app/backend
-
-# Verifica se o arquivo server.js existe
-if [ ! -f "src/server.js" ]; then
-    echo "❌ Erro: Arquivo server.js não encontrado"
-    ls -la src/
-    exit 1
-fi
-
-# Executa migrações do Prisma (se necessário)
-echo "📊 Executando migrações do banco de dados..."
-if npx prisma migrate deploy 2>/dev/null; then
-    echo "✅ Migrações executadas com sucesso"
-else
-    echo "⚠️ Erro nas migrações ou banco não disponível"
-fi
-
-# Inicia o backend em background
-echo "🔧 Iniciando servidor backend na porta $PORT..."
-node src/server.js > /var/log/backend.log 2>&1 &
-BACKEND_PID=$!
-
-# Aguarda o backend inicializar com timeout maior
-echo "⏳ Aguardando backend inicializar..."
-MAX_ATTEMPTS=30
-ATTEMPT=0
-BACKEND_READY=false
-
-while [ $ATTEMPT -lt $MAX_ATTEMPTS ]; do
-    # Verifica se o processo ainda está rodando
-    if ! kill -0 $BACKEND_PID 2>/dev/null; then
-        echo "❌ Backend parou de funcionar. Logs:"
-        tail -n 20 /var/log/backend.log
-        exit 1
-    fi
-    
-    # Testa se o backend responde
-    if curl -f -s http://localhost:$PORT/health >/dev/null 2>&1; then
-        echo "✅ Backend iniciado com sucesso!"
-        BACKEND_READY=true
-        break
-    else
-        echo "⚠️ Tentativa $((ATTEMPT+1)) de $MAX_ATTEMPTS - Backend ainda iniciando..."
-        sleep 2
-    fi
-    ATTEMPT=$((ATTEMPT+1))
-done
-
-if [ "$BACKEND_READY" = "false" ]; then
-    echo "❌ Backend falhou ao iniciar após $MAX_ATTEMPTS tentativas"
-    echo "📋 Logs do backend:"
-    tail -n 50 /var/log/backend.log
-    echo "📋 Tentando matar processo e sair..."
-    kill $BACKEND_PID 2>/dev/null || true
-    exit 1
-fi
-
-# Cria um PID file para o backend
-echo $BACKEND_PID > /var/run/backend.pid
-
-# Função para cleanup no exit
-cleanup() {
-    echo "🛑 Encerrando aplicação..."
-    if [ -f /var/run/backend.pid ]; then
-        BACKEND_PID=$(cat /var/run/backend.pid)
-        if kill -0 $BACKEND_PID 2>/dev/null; then
-            echo "🔄 Parando backend (PID: $BACKEND_PID)..."
-            kill $BACKEND_PID
-            wait $BACKEND_PID 2>/dev/null || true
-        fi
-        rm -f /var/run/backend.pid
-    fi
+# Função para verificar se o backend está pronto
+check_backend() {
+    curl -f http://localhost:${PORT}/health >/dev/null 2>&1
+    return $?
 }
 
-trap cleanup EXIT INT TERM
+# Navega para o diretório do backend
+cd /app/backend || exit 1
+
+# Verifica se o Prisma client existe
+if [ ! -d "node_modules/@prisma/client" ]; then
+    echo "⚠️  Gerando Prisma client..."
+    npx prisma generate
+fi
+
+# Executa migrações do banco (se necessário)
+echo "📊 Verificando migrações do banco..."
+npx prisma migrate deploy 2>&1 | grep -v "already in sync" || true
+
+# Inicia o backend Node.js em background
+echo "🔧 Iniciando backend na porta ${PORT}..."
+node src/server.js 2>&1 | tee /var/log/backend.log &
+BACKEND_PID=$!
+
+# Aguarda o backend inicializar
+echo "⏳ Aguardando backend inicializar..."
+COUNTER=0
+MAX_TRIES=30
+
+while [ $COUNTER -lt $MAX_TRIES ]; do
+    sleep 2
+    if check_backend; then
+        echo "✅ Backend está rodando!"
+        break
+    fi
+    COUNTER=$((COUNTER + 1))
+    echo "   Tentativa $COUNTER de $MAX_TRIES..."
+done
+
+# Verifica se o backend iniciou com sucesso
+if [ $COUNTER -eq $MAX_TRIES ]; then
+    echo "❌ ERRO: Backend não iniciou após $MAX_TRIES tentativas"
+    echo "📋 Últimas linhas do log:"
+    tail -20 /var/log/backend.log
+    exit 1
+fi
+
+# Configura trap para encerrar processos corretamente
+trap 'kill $BACKEND_PID; nginx -s quit' TERM INT
 
 # Inicia o Nginx em foreground
-echo "🌐 Iniciando servidor Nginx..."
-exec nginx -g 'daemon off;'
+echo "🌐 Iniciando Nginx..."
+nginx -g 'daemon off;' &
+NGINX_PID=$!
+
+# Monitora os processos
+echo "✅ Sistema iniciado com sucesso!"
+echo "   Backend PID: $BACKEND_PID"
+echo "   Nginx PID: $NGINX_PID"
+
+# Aguarda por qualquer processo terminar
+wait $NGINX_PID $BACKEND_PID
