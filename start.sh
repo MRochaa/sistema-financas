@@ -1,34 +1,35 @@
 #!/bin/bash
 
-echo "🚀 Iniciando Sistema Finanças..."
+# Script de inicialização do container
+# Este script inicia o backend Node.js e o Nginx para servir o frontend
 
-# Inicia o backend em background
+echo "🚀 Iniciando Sistema Financeiro..."
+
+# Define variáveis de ambiente padrão se não estiverem definidas
+export NODE_ENV=${NODE_ENV:-production}
+export PORT=${PORT:-3001}
+
+# Navega para o diretório do backend
 cd /app/backend
 
-# Executa migrations
-echo "📦 Executando migrations..."
-npx prisma migrate deploy || echo "⚠️  Migrations já aplicadas ou erro"
+# Executa migrações do Prisma (se necessário)
+echo "📊 Executando migrações do banco de dados..."
+npx prisma migrate deploy 2>/dev/null || echo "⚠️ Migrações já aplicadas ou banco não disponível"
 
-# Gera cliente Prisma
-echo "🔧 Gerando cliente Prisma..."
-npx prisma generate
-
-# Inicia o backend
-echo "🎯 Iniciando backend na porta 3001..."
-node src/server.js &
+# Inicia o backend em background
+echo "🔧 Iniciando servidor backend na porta $PORT..."
+node server.js &
 
 # Aguarda o backend iniciar
-echo "⏳ Aguardando backend inicializar..."
 sleep 5
 
-# Verifica se backend está rodando
-until curl -f http://localhost:3001/health > /dev/null 2>&1; do
-    echo "⏳ Backend ainda iniciando..."
-    sleep 2
-done
-
-echo "✅ Backend rodando!"
+# Verifica se o backend está rodando
+if curl -f http://localhost:$PORT/health 2>/dev/null; then
+    echo "✅ Backend iniciado com sucesso!"
+else
+    echo "⚠️ Backend ainda iniciando..."
+fi
 
 # Inicia o Nginx em foreground
-echo "🌐 Iniciando Nginx..."
+echo "🌐 Iniciando servidor Nginx..."
 nginx -g 'daemon off;'
