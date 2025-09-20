@@ -11,7 +11,7 @@ COPY frontend/package*.json ./frontend/
 
 # Instala dependências do frontend
 WORKDIR /app/frontend
-RUN npm ci || npm install
+RUN npm install
 
 # Copia código do frontend
 WORKDIR /app
@@ -35,8 +35,8 @@ WORKDIR /app
 # Copia arquivos de configuração do backend
 COPY backend/package*.json ./
 
-# Instala todas as dependências (incluindo dev para gerar Prisma)
-RUN npm ci || npm install
+# Instala todas as dependências
+RUN npm install
 
 # Copia todo código do backend
 COPY backend/ ./
@@ -44,7 +44,7 @@ COPY backend/ ./
 # Gera cliente Prisma
 RUN npx prisma generate
 
-# Remove dependências de desenvolvimento
+# Remove dependências de desenvolvimento para produção
 RUN npm prune --omit=dev
 
 # ============================================
@@ -53,15 +53,19 @@ RUN npm prune --omit=dev
 FROM nginx:alpine
 
 # Instala Node.js 20, OpenSSL e outras dependências necessárias
-RUN apk add --no-cache nodejs npm openssl curl bash && \
+RUN apk add --no-cache nodejs npm openssl curl bash procps && \
     node --version && \
     npm --version
+
+# Cria usuário não-root para segurança
+RUN addgroup -g 1000 -S appgroup && \
+    adduser -u 1000 -S appuser -G appgroup
 
 # Cria diretório de trabalho
 WORKDIR /app
 
 # Copia o backend buildado (mantém estrutura de diretórios)
-COPY --from=backend-builder /app /app/backend
+COPY --from=backend-builder --chown=appuser:appgroup /app /app/backend
 
 # Copia o frontend buildado para o Nginx
 COPY --from=frontend-builder /app/frontend/dist /usr/share/nginx/html
@@ -73,15 +77,29 @@ COPY nginx.conf /etc/nginx/conf.d/default.conf
 COPY start.sh /app/start.sh
 RUN chmod +x /app/start.sh
 
-# Cria diretório para logs
-RUN mkdir -p /var/log && touch /var/log/backend.log
+# Cria diretório para logs com permissões corretas
+RUN mkdir -p /var/log && \
+    touch /var/log/backend.log && \
+    chown appuser:appgroup /var/log/backend.log && \
+    mkdir -p /var/run && \
+    chown appuser:appgroup /var/run
+
+# Ajusta permissões do Nginx
+RUN chown -R appuser:appgroup /var/cache/nginx && \
+    chown -R appuser:appgroup /var/log/nginx && \
+    chown -R appuser:appgroup /etc/nginx/conf.d && \
+    touch /var/run/nginx.pid && \
+    chown appuser:appgroup /var/run/nginx.pid
 
 # Expõe porta 80 (Nginx serve tudo)
 EXPOSE 80
 
-# Health check mais tolerante para o startup
+# Health check mais robusto
 HEALTHCHECK --interval=30s --timeout=10s --start-period=120s --retries=5 \
     CMD curl -f http://localhost/health || exit 1
+
+# Muda para usuário não-root
+USER appuser
 
 # Comando de inicialização
 CMD ["/app/start.sh"]
