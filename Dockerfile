@@ -6,30 +6,16 @@ FROM node:20-alpine AS frontend-builder
 # Define diretório de trabalho
 WORKDIR /app
 
-# Copia arquivos de configuração do projeto raiz (se existirem)
-COPY package*.json ./
-
-# Verifica se existe package-lock.json na raiz e instala dependências
-RUN if [ -f "package-lock.json" ]; then \
-        npm ci; \
-    elif [ -f "package.json" ]; then \
-        npm install; \
-    fi
-
 # Copia arquivos de configuração do frontend
 COPY frontend/package*.json ./frontend/
 
-# Muda para diretório do frontend e instala dependências
+# Instala dependências do frontend
 WORKDIR /app/frontend
-RUN if [ -f "package-lock.json" ]; then \
-        npm ci; \
-    else \
-        npm install; \
-    fi
+RUN npm ci || npm install
 
-# Volta para raiz e copia todo o código
+# Copia código do frontend
 WORKDIR /app
-COPY . ./
+COPY frontend/ ./frontend/
 
 # Build do frontend
 WORKDIR /app/frontend
@@ -49,14 +35,10 @@ WORKDIR /app
 # Copia arquivos de configuração do backend
 COPY backend/package*.json ./
 
-# Instala dependências do backend
-RUN if [ -f "package-lock.json" ]; then \
-        npm ci; \
-    else \
-        npm install; \
-    fi
+# Instala todas as dependências (incluindo dev para gerar Prisma)
+RUN npm ci || npm install
 
-# Copia código do backend
+# Copia todo código do backend
 COPY backend/ ./
 
 # Gera cliente Prisma
@@ -78,24 +60,27 @@ RUN apk add --no-cache nodejs npm openssl curl bash && \
 # Cria diretório de trabalho
 WORKDIR /app
 
-# Copia o backend buildado
+# Copia o backend buildado (mantém estrutura de diretórios)
 COPY --from=backend-builder /app /app/backend
 
 # Copia o frontend buildado para o Nginx
 COPY --from=frontend-builder /app/frontend/dist /usr/share/nginx/html
 
-# Copia configuração do Nginx (certifique-se que este arquivo existe)
+# Copia configuração do Nginx
 COPY nginx.conf /etc/nginx/conf.d/default.conf
 
-# Copia script de inicialização (certifique-se que este arquivo existe)
+# Copia script de inicialização
 COPY start.sh /app/start.sh
 RUN chmod +x /app/start.sh
+
+# Cria diretório para logs
+RUN mkdir -p /var/log && touch /var/log/backend.log
 
 # Expõe porta 80 (Nginx serve tudo)
 EXPOSE 80
 
 # Health check mais tolerante para o startup
-HEALTHCHECK --interval=30s --timeout=10s --start-period=90s --retries=5 \
+HEALTHCHECK --interval=30s --timeout=10s --start-period=120s --retries=5 \
     CMD curl -f http://localhost/health || exit 1
 
 # Comando de inicialização
