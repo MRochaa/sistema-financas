@@ -5,17 +5,18 @@ FROM node:20-alpine AS frontend-builder
 
 WORKDIR /app
 
-# Copia e instala dependências do frontend
+# Copia arquivos de dependências do frontend
 COPY frontend/package*.json ./frontend/
-WORKDIR /app/frontend
-# Usa npm install ao invés de npm ci
-RUN npm install --production
 
-# Copia código do frontend
+# Instala TODAS as dependências (incluindo dev) para o build
+WORKDIR /app/frontend
+RUN npm install
+
+# Copia código fonte do frontend
 WORKDIR /app
 COPY frontend/ ./frontend/
 
-# Build do frontend
+# Executa o build do frontend
 WORKDIR /app/frontend
 RUN npm run build
 
@@ -29,13 +30,13 @@ RUN apk add --no-cache openssl openssl-dev libc6-compat
 
 WORKDIR /app
 
-# Copia package.json do backend
+# Copia arquivos de dependências do backend
 COPY backend/package*.json ./
 
-# Usa npm install ao invés de npm ci
+# Instala todas as dependências
 RUN npm install
 
-# Copia todo o código do backend incluindo prisma
+# Copia código fonte do backend
 COPY backend/ ./
 
 # Gera o Prisma Client com os targets binários corretos
@@ -65,7 +66,7 @@ RUN mkdir -p /var/log/nginx /var/cache/nginx /var/run/nginx /usr/share/nginx/htm
 # Copia backend compilado com node_modules e prisma client gerado
 COPY --from=backend-builder /app /app/backend
 
-# Copia frontend compilado
+# Copia frontend compilado (apenas os arquivos estáticos gerados)
 COPY --from=frontend-builder /app/frontend/dist /usr/share/nginx/html
 
 # Copia arquivos de configuração
