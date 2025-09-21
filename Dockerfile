@@ -10,7 +10,8 @@ COPY frontend/package*.json ./frontend/
 
 # Instala dependências do frontend
 WORKDIR /app/frontend
-RUN npm ci --only=production
+# Mudança: usando npm install ao invés de npm ci
+RUN npm install --only=production
 
 # Copia código fonte do frontend
 WORKDIR /app
@@ -21,7 +22,7 @@ WORKDIR /app/frontend
 RUN npm run build
 
 # ============================================
-# ESTÁGIO 2: Build do Backend
+# ESTÁGIO 2: Build do Backend  
 # ============================================
 FROM node:20-alpine AS backend-builder
 
@@ -34,7 +35,8 @@ WORKDIR /app
 COPY backend/package*.json ./
 
 # Instala TODAS as dependências (necessário para Prisma)
-RUN npm ci
+# Mudança: usando npm install ao invés de npm ci
+RUN npm install
 
 # Copia código do backend
 COPY backend/ ./
