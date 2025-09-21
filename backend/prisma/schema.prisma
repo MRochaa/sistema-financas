@@ -1,5 +1,10 @@
+// Este arquivo define o esquema do banco de dados usando Prisma ORM
+// Configuração do gerador e datasource
+
 generator client {
-  provider = "prisma-client-js"
+  provider      = "prisma-client-js"
+  // IMPORTANTE: Adicionar targets binários para Alpine Linux
+  binaryTargets = ["native", "linux-musl", "linux-musl-openssl-3.0.x"]
 }
 
 datasource db {
@@ -7,51 +12,100 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+// Modelo de Usuário - armazena informações de autenticação
 model User {
-  id        String   @id @default(cuid())
+  id        String   @id @default(uuid())
   email     String   @unique
   password  String
   name      String
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
-
+  
+  // Relacionamentos
+  accounts Account[]
+  categories Category[]
   transactions Transaction[]
-
-  @@map("users")
+  budgets Budget[]
 }
 
-model Category {
-  id          String   @id @default(cuid())
-  name        String   @unique
-  type        TransactionType
-  color       String   @default("#6B7280")
+// Modelo de Conta - representa contas bancárias/carteiras
+model Account {
+  id          String   @id @default(uuid())
+  name        String
+  type        String   // checking, savings, credit_card, cash
+  balance     Float    @default(0)
+  userId      String
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
-
-  transactions Transaction[]
-
-  @@map("categories")
-}
-
-model Transaction {
-  id          String          @id @default(cuid())
-  type        TransactionType
-  amount      Float
-  description String?
-  date        DateTime
-  createdAt   DateTime        @default(now())
-  updatedAt   DateTime        @updatedAt
-
-  userId     String
-  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   
-  categoryId String
-  category   Category @relation(fields: [categoryId], references: [id], onDelete: Restrict)
-
-  @@map("transactions")
+  // Relacionamentos
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  transactions Transaction[]
+  
+  @@index([userId])
 }
 
-enum TransactionType {
-  INCOME
-  EXPENSE
+// Modelo de Categoria - categorias de transações
+model Category {
+  id        String   @id @default(uuid())
+  name      String
+  type      String   // income, expense
+  icon      String?
+  color     String?
+  userId    String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  // Relacionamentos
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  transactions Transaction[]
+  budgets Budget[]
+  
+  @@index([userId])
+  @@unique([name, userId])
+}
+
+// Modelo de Transação - registros financeiros
+model Transaction {
+  id          String   @id @default(uuid())
+  description String
+  amount      Float
+  type        String   // income, expense, transfer
+  date        DateTime
+  userId      String
+  accountId   String
+  categoryId  String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  // Relacionamentos
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  account Account @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  category Category? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  
+  @@index([userId])
+  @@index([accountId])
+  @@index([categoryId])
+  @@index([date])
+}
+
+// Modelo de Orçamento - controle de gastos por categoria
+model Budget {
+  id         String   @id @default(uuid())
+  amount     Float
+  period     String   // monthly, yearly
+  startDate  DateTime
+  endDate    DateTime
+  userId     String
+  categoryId String
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  
+  // Relacionamentos
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  category Category @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  
+  @@index([userId])
+  @@index([categoryId])
+  @@unique([userId, categoryId, period, startDate])
 }
