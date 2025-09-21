@@ -10,8 +10,8 @@ COPY frontend/package*.json ./frontend/
 
 # Instala dependências do frontend
 WORKDIR /app/frontend
-# Mudança: usando npm install ao invés de npm ci
-RUN npm install --only=production
+# Instalando TODAS as dependências (incluindo devDependencies como o Vite)
+RUN npm install
 
 # Copia código fonte do frontend
 WORKDIR /app
@@ -35,7 +35,6 @@ WORKDIR /app
 COPY backend/package*.json ./
 
 # Instala TODAS as dependências (necessário para Prisma)
-# Mudança: usando npm install ao invés de npm ci
 RUN npm install
 
 # Copia código do backend
