@@ -99,11 +99,23 @@ app.get('/api/auth/me', (req, res) => {
 app.get('/api/categories', (req, res) => {
   try {
     const categories = [
+      // Income categories
       { id: '1', name: 'Alimentação', type: 'EXPENSE', color: '#EF4444' },
       { id: '2', name: 'Salário', type: 'INCOME', color: '#10B981' },
       { id: '3', name: 'Transporte', type: 'EXPENSE', color: '#DC2626' },
       { id: '4', name: 'Lazer', type: 'EXPENSE', color: '#F59E0B' },
       { id: '5', name: 'Freelance', type: 'INCOME', color: '#059669' },
+      { id: '6', name: 'Investimentos', type: 'INCOME', color: '#047857' },
+      { id: '7', name: 'Outros Rendimentos', type: 'INCOME', color: '#065f46' },
+      
+      // Expense categories
+      { id: '8', name: 'Moradia', type: 'EXPENSE', color: '#B91C1C' },
+      { id: '9', name: 'Saúde', type: 'EXPENSE', color: '#991B1B' },
+      { id: '10', name: 'Educação', type: 'EXPENSE', color: '#7F1D1D' },
+      { id: '11', name: 'Roupas', type: 'EXPENSE', color: '#D97706' },
+      { id: '12', name: 'Tecnologia', type: 'EXPENSE', color: '#B45309' },
+      { id: '13', name: 'Contas', type: 'EXPENSE', color: '#92400E' },
+      { id: '14', name: 'Outros Gastos', type: 'EXPENSE', color: '#78350F' }
     ];
     res.json(categories);
   } catch (error) {

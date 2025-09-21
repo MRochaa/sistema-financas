@@ -62,76 +62,29 @@ export const useData = () => {
   return context;
 };
 
-// Initial mock data
+// Initial categories - basic set for new users
 const initialCategories: Category[] = [
-  { id: '1', name: 'Alimentação', type: 'EXPENSE', color: '#EF4444' },
-  { id: '2', name: 'Salário', type: 'INCOME', color: '#10B981' },
-  { id: '3', name: 'Transporte', type: 'EXPENSE', color: '#DC2626' },
-  { id: '4', name: 'Lazer', type: 'EXPENSE', color: '#F59E0B' },
-  { id: '5', name: 'Freelance', type: 'INCOME', color: '#059669' },
-  { id: '6', name: 'Moradia', type: 'EXPENSE', color: '#B91C1C' },
-  { id: '7', name: 'Investimentos', type: 'INCOME', color: '#047857' },
+  // Income categories
+  { id: '1', name: 'Salário', type: 'INCOME', color: '#10B981' },
+  { id: '2', name: 'Freelance', type: 'INCOME', color: '#059669' },
+  { id: '3', name: 'Investimentos', type: 'INCOME', color: '#047857' },
+  { id: '4', name: 'Outros Rendimentos', type: 'INCOME', color: '#065f46' },
+  
+  // Expense categories
+  { id: '5', name: 'Alimentação', type: 'EXPENSE', color: '#EF4444' },
+  { id: '6', name: 'Transporte', type: 'EXPENSE', color: '#DC2626' },
+  { id: '7', name: 'Moradia', type: 'EXPENSE', color: '#B91C1C' },
   { id: '8', name: 'Saúde', type: 'EXPENSE', color: '#991B1B' },
   { id: '9', name: 'Educação', type: 'EXPENSE', color: '#7F1D1D' },
-  { id: '10', name: 'Tecnologia', type: 'EXPENSE', color: '#B45309' },
+  { id: '10', name: 'Lazer', type: 'EXPENSE', color: '#F59E0B' },
+  { id: '11', name: 'Roupas', type: 'EXPENSE', color: '#D97706' },
+  { id: '12', name: 'Tecnologia', type: 'EXPENSE', color: '#B45309' },
+  { id: '13', name: 'Contas', type: 'EXPENSE', color: '#92400E' },
+  { id: '14', name: 'Outros Gastos', type: 'EXPENSE', color: '#78350F' }
 ];
 
-const initialTransactions: Transaction[] = [
-  {
-    id: '1',
-    type: 'EXPENSE',
-    amount: 150.50,
-    description: 'Supermercado',
-    date: '2024-01-15T10:00:00Z',
-    category: initialCategories[0], // Alimentação
-    user: { name: 'João', email: 'joao@email.com' }
-  },
-  {
-    id: '2',
-    type: 'INCOME',
-    amount: 4250.00,
-    description: 'Salário Janeiro',
-    date: '2024-01-01T09:00:00Z',
-    category: initialCategories[1], // Salário
-    user: { name: 'Maria', email: 'maria@email.com' }
-  },
-  {
-    id: '3',
-    type: 'EXPENSE',
-    amount: 80.00,
-    description: 'Combustível',
-    date: '2024-01-14T16:30:00Z',
-    category: initialCategories[2], // Transporte
-    user: { name: 'João', email: 'joao@email.com' }
-  },
-  {
-    id: '4',
-    type: 'EXPENSE',
-    amount: 1200.00,
-    description: 'Aluguel Janeiro',
-    date: '2024-01-01T08:00:00Z',
-    category: initialCategories[5], // Moradia
-    user: { name: 'Maria', email: 'maria@email.com' }
-  },
-  {
-    id: '5',
-    type: 'INCOME',
-    amount: 800.00,
-    description: 'Projeto Freelance',
-    date: '2024-01-10T14:00:00Z',
-    category: initialCategories[4], // Freelance
-    user: { name: 'João', email: 'joao@email.com' }
-  },
-  {
-    id: '6',
-    type: 'EXPENSE',
-    amount: 200.00,
-    description: 'Cinema e jantar',
-    date: '2024-01-12T19:00:00Z',
-    category: initialCategories[3], // Lazer
-    user: { name: 'Maria', email: 'maria@email.com' }
-  }
-];
+// No initial transactions - start clean
+const initialTransactions: Transaction[] = [];
 
 export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [categories, setCategories] = useState<Category[]>(() => {
