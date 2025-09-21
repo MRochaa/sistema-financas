@@ -41,8 +41,8 @@ export const useAuth = () => {
   return context;
 };
 
-// Mock API for demo purposes - replace with real backend
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
+// API configuration - use relative URLs in production
+const API_URL = import.meta.env.VITE_API_URL || '/api';
 
 // Configure axios defaults
 axios.defaults.baseURL = API_URL;
