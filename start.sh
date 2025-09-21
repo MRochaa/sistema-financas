@@ -9,7 +9,7 @@ echo "Porta Backend: $PORT"
 
 # Função para verificar se o backend está pronto
 check_backend() {
-    curl -s http://localhost:${PORT}/api/health > /dev/null 2>&1
+    curl -s http://localhost:${PORT}/health > /dev/null 2>&1
     return $?
 }
 
@@ -23,14 +23,20 @@ npx prisma migrate deploy || {
     echo "Aviso: Não foi possível executar migrações. Continuando..."
 }
 
+# Gera o cliente Prisma
+echo "Gerando cliente Prisma..."
+npx prisma generate || {
+    echo "Aviso: Não foi possível gerar cliente Prisma. Continuando..."
+}
+
 # Inicia o servidor Node.js
 node src/server.js &
 BACKEND_PID=$!
 
-# Aguarda o backend iniciar (máximo 30 segundos)
+# Aguarda o backend iniciar (máximo 60 segundos para dar mais tempo)
 echo "Aguardando backend iniciar..."
 WAIT_TIME=0
-MAX_WAIT=30
+MAX_WAIT=60
 
 while [ $WAIT_TIME -lt $MAX_WAIT ]; do
     if check_backend; then
@@ -44,6 +50,8 @@ done
 
 if [ $WAIT_TIME -ge $MAX_WAIT ]; then
     echo "❌ ERRO: Backend não iniciou no tempo esperado"
+    echo "Logs do backend:"
+    tail -n 20 /var/log/backend.log 2>/dev/null || echo "Nenhum log encontrado"
     exit 1
 fi
 

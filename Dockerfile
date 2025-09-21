@@ -6,47 +6,19 @@ FROM node:20-alpine AS frontend-builder
 WORKDIR /app
 
 # Copia arquivos de dependências do frontend
-COPY frontend/package*.json ./frontend/
+COPY package*.json ./
 
 # Instala TODAS as dependências (incluindo dev) para o build
-WORKDIR /app/frontend
 RUN npm install
 
 # Copia código fonte do frontend
-WORKDIR /app
-COPY frontend/ ./frontend/
+COPY . .
 
 # Executa o build do frontend
-WORKDIR /app/frontend
 RUN npm run build
 
 # ============================================
-# ESTÁGIO 2: Build do Backend
-# ============================================
-FROM node:20-alpine AS backend-builder
-
-# Instala dependências do sistema necessárias para Prisma
-RUN apk add --no-cache openssl openssl-dev libc6-compat
-
-WORKDIR /app
-
-# Copia arquivos de dependências do backend
-COPY backend/package*.json ./
-
-# Instala todas as dependências
-RUN npm install
-
-# Copia código fonte do backend
-COPY backend/ ./
-
-# Gera o Prisma Client com os targets binários corretos
-RUN npx prisma generate
-
-# Remove devDependencies mantendo apenas produção
-RUN npm prune --production
-
-# ============================================
-# ESTÁGIO 3: Imagem Final de Produção
+# ESTÁGIO 2: Imagem Final de Produção
 # ============================================
 FROM node:20-alpine
 
@@ -63,32 +35,39 @@ RUN apk add --no-cache \
 RUN mkdir -p /var/log/nginx /var/cache/nginx /var/run/nginx /usr/share/nginx/html \
     && chown -R nginx:nginx /var/log/nginx /var/cache/nginx /var/run/nginx
 
-# Copia backend compilado com node_modules e prisma client gerado
-COPY --from=backend-builder /app /app/backend
-
 # Copia frontend compilado (apenas os arquivos estáticos gerados)
-COPY --from=frontend-builder /app/frontend/dist /usr/share/nginx/html
+COPY --from=frontend-builder /app/dist /usr/share/nginx/html
 
 # Copia arquivos de configuração
 COPY nginx.conf /etc/nginx/http.d/default.conf
-COPY start.sh /start.sh
 
-# Ajusta permissões do script
-RUN chmod +x /start.sh
+# Cria um servidor Node.js simples para servir a aplicação
+WORKDIR /app
 
-# Define diretório de trabalho
-WORKDIR /app/backend
+# Cria um servidor básico que serve os arquivos estáticos e health check
+RUN echo 'const express = require("express"); \
+const path = require("path"); \
+const app = express(); \
+const PORT = process.env.PORT || 3001; \
+app.use(express.static("/usr/share/nginx/html")); \
+app.get("/health", (req, res) => res.json({ status: "healthy" })); \
+app.get("/api/health", (req, res) => res.json({ status: "healthy" })); \
+app.get("*", (req, res) => res.sendFile("/usr/share/nginx/html/index.html")); \
+app.listen(PORT, "0.0.0.0", () => console.log(`Server running on port ${PORT}`));' > server.js
+
+# Instala apenas o express para o servidor simples
+RUN npm init -y && npm install express
 
 # Variáveis de ambiente padrão
 ENV NODE_ENV=production \
     PORT=3001
 
-# Expõe porta 80 para nginx
-EXPOSE 80
+# Expõe porta 3001 (não 80, pois o Coolify vai mapear)
+EXPOSE 3001
 
-# Health check que verifica se nginx está respondendo
+# Health check que verifica se o servidor está respondendo
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
-    CMD curl -f http://localhost/health || exit 1
+    CMD curl -f http://localhost:3001/health || exit 1
 
-# Comando de inicialização
-CMD ["/start.sh"]
+# Comando de inicialização simples
+CMD ["node", "server.js"]

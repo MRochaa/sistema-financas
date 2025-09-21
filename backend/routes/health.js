@@ -1,9 +1,3 @@
-/**
- * Rota de health check para monitoramento do container
- * Verifica se a API está respondendo e se o banco está acessível
- * Compatível com ESM (módulos ES6)
- */
-
 import express from 'express';
 import { PrismaClient } from '@prisma/client';
 
