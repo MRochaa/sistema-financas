@@ -1,92 +1,126 @@
-// Importações usando ES modules
-import express from 'express';
-import cors from 'cors';
-import { PrismaClient } from '@prisma/client';
+// Servidor principal da aplicação
+// Gerencia a inicialização do Express e conexão com banco de dados
 
-// Inicializar Express e Prisma
+const express = require('express');
+const cors = require('cors');
+const dotenv = require('dotenv');
+const { PrismaClient } = require('@prisma/client');
+
+// Carrega variáveis de ambiente
+dotenv.config();
+
+// Inicializa Express e Prisma
 const app = express();
-const prisma = new PrismaClient();
+const prisma = new PrismaClient({
+  // Configurações para melhor logging em produção
+  log: process.env.NODE_ENV === 'production' 
+    ? ['error', 'warn'] 
+    : ['query', 'info', 'warn', 'error'],
+});
 
-// Configuração de porta
+// Porta do servidor
 const PORT = process.env.PORT || 3001;
 
-// Middlewares
-app.use(cors());
+// Middlewares globais
+app.use(cors({
+  origin: process.env.FRONTEND_URL || '*',
+  credentials: true
+}));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Rota de health check
+// Middleware de logging simples
+app.use((req, res, next) => {
+  console.log(`[${new Date().toISOString()}] ${req.method} ${req.path}`);
+  next();
+});
+
+// Rota de health check IMPORTANTE para o Docker
 app.get('/api/health', (req, res) => {
-  res.json({ status: 'ok', timestamp: new Date().toISOString() });
-});
-
-// Rota básica
-app.get('/api', (req, res) => {
-  res.json({ message: 'API do Sistema de Finanças está funcionando!' });
-});
-
-// Rotas de autenticação
-app.post('/api/auth/register', async (req, res) => {
-  try {
-    // TODO: Implementar registro
-    res.json({ message: 'Endpoint de registro', data: req.body });
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
-app.post('/api/auth/login', async (req, res) => {
-  try {
-    // TODO: Implementar login
-    res.json({ message: 'Endpoint de login', data: req.body });
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// Rotas de transações
-app.get('/api/transactions', async (req, res) => {
-  try {
-    // TODO: Buscar transações
-    res.json({ message: 'Lista de transações', data: [] });
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
-app.post('/api/transactions', async (req, res) => {
-  try {
-    // TODO: Criar transação
-    res.json({ message: 'Criar transação', data: req.body });
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// Tratamento de erros global
-app.use((err, req, res, next) => {
-  console.error('Erro não tratado:', err);
-  res.status(500).json({ 
-    error: 'Erro interno do servidor',
-    message: process.env.NODE_ENV === 'development' ? err.message : undefined
+  res.status(200).json({ 
+    status: 'healthy',
+    timestamp: new Date().toISOString(),
+    environment: process.env.NODE_ENV
   });
 });
 
-// Rota 404
+// Rota de teste da API
+app.get('/api', (req, res) => {
+  res.json({ 
+    message: 'API do Sistema de Finanças funcionando!',
+    version: '1.0.0'
+  });
+});
+
+// Importa e usa as rotas da aplicação
+try {
+  const authRoutes = require('../routes/auth');
+  const accountRoutes = require('../routes/accounts');
+  const transactionRoutes = require('../routes/transactions');
+  const categoryRoutes = require('../routes/categories');
+  const budgetRoutes = require('../routes/budgets');
+  const dashboardRoutes = require('../routes/dashboard');
+  
+  // Registra as rotas
+  app.use('/api/auth', authRoutes);
+  app.use('/api/accounts', accountRoutes);
+  app.use('/api/transactions', transactionRoutes);
+  app.use('/api/categories', categoryRoutes);
+  app.use('/api/budgets', budgetRoutes);
+  app.use('/api/dashboard', dashboardRoutes);
+} catch (error) {
+  console.error('Erro ao carregar rotas:', error);
+  // Continua mesmo se algumas rotas falharem
+}
+
+// Middleware de tratamento de erros global
+app.use((err, req, res, next) => {
+  console.error('Erro:', err);
+  res.status(err.status || 500).json({
+    error: process.env.NODE_ENV === 'production' 
+      ? 'Erro interno do servidor' 
+      : err.message
+  });
+});
+
+// Rota 404 para requisições não encontradas
 app.use('*', (req, res) => {
   res.status(404).json({ error: 'Rota não encontrada' });
 });
 
-// Iniciar servidor
-app.listen(PORT, '0.0.0.0', () => {
-  console.log(`========================================`);
-  console.log(`🚀 Servidor rodando na porta ${PORT}`);
-  console.log(`📊 Ambiente: ${process.env.NODE_ENV}`);
-  console.log(`🔗 API disponível em http://localhost:${PORT}/api`);
-  console.log(`========================================`);
-});
+// Função para conectar ao banco de dados
+async function connectDatabase() {
+  try {
+    await prisma.$connect();
+    console.log('✅ Conectado ao banco de dados PostgreSQL');
+    return true;
+  } catch (error) {
+    console.error('❌ Erro ao conectar ao banco de dados:', error);
+    // Em produção, tenta reconectar após 5 segundos
+    if (process.env.NODE_ENV === 'production') {
+      console.log('Tentando reconectar em 5 segundos...');
+      setTimeout(connectDatabase, 5000);
+    }
+    return false;
+  }
+}
 
-// Tratamento de encerramento gracioso
+// Inicializa o servidor
+async function startServer() {
+  // Conecta ao banco de dados
+  await connectDatabase();
+  
+  // Inicia o servidor Express
+  app.listen(PORT, '0.0.0.0', () => {
+    console.log('========================================');
+    console.log(`🚀 Servidor rodando na porta ${PORT}`);
+    console.log(`📊 Ambiente: ${process.env.NODE_ENV}`);
+    console.log(`🔗 API disponível em http://localhost:${PORT}/api`);
+    console.log('========================================');
+  });
+}
+
+// Tratamento de sinais para shutdown gracioso
 process.on('SIGTERM', async () => {
   console.log('SIGTERM recebido, encerrando servidor...');
   await prisma.$disconnect();
@@ -99,5 +133,11 @@ process.on('SIGINT', async () => {
   process.exit(0);
 });
 
-// Exportar app para testes
-export default app;
+// Inicia o servidor
+startServer().catch(error => {
+  console.error('Erro fatal ao iniciar servidor:', error);
+  process.exit(1);
+});
+
+// Exporta app e prisma para uso em outros módulos
+module.exports = { app, prisma };
