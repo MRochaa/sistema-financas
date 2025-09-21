@@ -1,61 +1,81 @@
 #!/bin/bash
 
+# Script de inicialização do container
+# Gerencia o startup do backend Node.js e frontend Nginx
+
 echo "=== Iniciando Sistema de Finanças ==="
+echo "Ambiente: $NODE_ENV"
+echo "Porta Backend: $PORT"
 
-# Configurar variáveis
-export NODE_ENV=${NODE_ENV:-production}
-export PORT=${PORT:-3001}
-export DATABASE_URL=${DATABASE_URL}
-export JWT_SECRET=${JWT_SECRET}
+# Função para verificar se o backend está pronto
+check_backend() {
+    curl -s http://localhost:${PORT}/api/health > /dev/null 2>&1
+    return $?
+}
 
-# Verificar estrutura do backend
-echo "Verificando estrutura do backend..."
-ls -la /app/backend/
-
-# Encontrar o arquivo principal do servidor
-if [ -f "/app/backend/src/server.js" ]; then
-    SERVER_FILE="/app/backend/src/server.js"
-elif [ -f "/app/backend/server.js" ]; then
-    SERVER_FILE="/app/backend/server.js"
-elif [ -f "/app/backend/src/index.js" ]; then
-    SERVER_FILE="/app/backend/src/index.js"
-elif [ -f "/app/backend/index.js" ]; then
-    SERVER_FILE="/app/backend/index.js"
-else
-    echo "ERRO: Arquivo do servidor não encontrado!"
-    echo "Conteúdo do diretório backend:"
-    find /app/backend -name "*.js" -type f
-    exit 1
-fi
-
-echo "Arquivo do servidor encontrado: $SERVER_FILE"
-
-# Iniciar backend
-echo "Iniciando backend na porta $PORT..."
+# Inicia o backend em background
+echo "Iniciando backend na porta ${PORT}..."
 cd /app/backend
-node $SERVER_FILE &
+
+# Executa migrações do Prisma se necessário
+echo "Verificando migrações do banco de dados..."
+npx prisma migrate deploy || {
+    echo "Aviso: Não foi possível executar migrações. Continuando..."
+}
+
+# Inicia o servidor Node.js
+node src/server.js &
 BACKEND_PID=$!
 
-# Aguardar backend iniciar
+# Aguarda o backend iniciar (máximo 30 segundos)
 echo "Aguardando backend iniciar..."
-sleep 5
+WAIT_TIME=0
+MAX_WAIT=30
 
-# Verificar se o backend está rodando
-if ! kill -0 $BACKEND_PID 2>/dev/null; then
-    echo "ERRO: Backend falhou ao iniciar!"
-    echo "Tentando ver logs de erro..."
-    node $SERVER_FILE
+while [ $WAIT_TIME -lt $MAX_WAIT ]; do
+    if check_backend; then
+        echo "✅ Backend iniciado com sucesso!"
+        break
+    fi
+    echo "Aguardando... ($WAIT_TIME/$MAX_WAIT)"
+    sleep 2
+    WAIT_TIME=$((WAIT_TIME + 2))
+done
+
+if [ $WAIT_TIME -ge $MAX_WAIT ]; then
+    echo "❌ ERRO: Backend não iniciou no tempo esperado"
     exit 1
 fi
 
-# Testar se o backend está respondendo
-echo "Testando backend..."
-curl -f http://localhost:$PORT/api/health || echo "Aviso: Backend pode não ter endpoint /api/health"
-
-# Verificar frontend
-echo "Verificando frontend..."
-ls -la /usr/share/nginx/html/
-
-# Iniciar nginx
+# Inicia o Nginx em foreground
 echo "Iniciando Nginx..."
-nginx -g "daemon off;"
+nginx -g "daemon off;" &
+NGINX_PID=$!
+
+# Função para tratar sinais de término
+cleanup() {
+    echo "Encerrando serviços..."
+    kill $BACKEND_PID 2>/dev/null
+    kill $NGINX_PID 2>/dev/null
+    exit 0
+}
+
+# Configura tratamento de sinais
+trap cleanup SIGTERM SIGINT
+
+# Mantém o script rodando e monitora os processos
+while true; do
+    # Verifica se o backend ainda está rodando
+    if ! kill -0 $BACKEND_PID 2>/dev/null; then
+        echo "❌ Backend parou inesperadamente"
+        cleanup
+    fi
+    
+    # Verifica se o nginx ainda está rodando  
+    if ! kill -0 $NGINX_PID 2>/dev/null; then
+        echo "❌ Nginx parou inesperadamente"
+        cleanup
+    fi
+    
+    sleep 5
+done
