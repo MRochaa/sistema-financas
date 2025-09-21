@@ -5,15 +5,14 @@ FROM node:20-alpine AS frontend-builder
 
 WORKDIR /app
 
-# Copia apenas package files primeiro (cache de camadas)
+# Copia package.json do frontend
 COPY frontend/package*.json ./frontend/
 
-# Instala dependências do frontend
+# Instala todas as dependências do frontend
 WORKDIR /app/frontend
-# Instalando TODAS as dependências (incluindo devDependencies como o Vite)
 RUN npm install
 
-# Copia código fonte do frontend
+# Copia código do frontend
 WORKDIR /app
 COPY frontend/ ./frontend/
 
@@ -22,19 +21,19 @@ WORKDIR /app/frontend
 RUN npm run build
 
 # ============================================
-# ESTÁGIO 2: Build do Backend  
+# ESTÁGIO 2: Build do Backend
 # ============================================
 FROM node:20-alpine AS backend-builder
 
-# Instala dependências do sistema para Prisma
+# Instala dependências necessárias para Prisma
 RUN apk add --no-cache openssl libc6-compat
 
 WORKDIR /app
 
-# Copia package files
+# Copia package.json do backend
 COPY backend/package*.json ./
 
-# Instala TODAS as dependências (necessário para Prisma)
+# Instala todas as dependências
 RUN npm install
 
 # Copia código do backend
@@ -43,52 +42,44 @@ COPY backend/ ./
 # Gera Prisma client
 RUN npx prisma generate
 
-# Remove devDependencies para produção
+# Remove devDependencies
 RUN npm prune --production
 
 # ============================================
-# ESTÁGIO 3: Imagem Final
+# ESTÁGIO 3: Imagem Final de Produção
 # ============================================
 FROM node:20-alpine
 
-# Instala dependências necessárias
-RUN apk add --no-cache \
-    nginx \
-    curl \
-    bash \
-    openssl \
-    && rm -rf /var/cache/apk/*
+# Instala nginx e ferramentas necessárias
+RUN apk add --no-cache nginx bash curl && \
+    rm -rf /var/cache/apk/*
 
 # Cria diretórios necessários
-WORKDIR /app
-RUN mkdir -p /var/log/nginx /var/cache/nginx /var/run
+RUN mkdir -p /var/log/nginx /var/cache/nginx /var/run /usr/share/nginx/html
 
-# Copia backend do estágio de build
+# Copia backend compilado
 COPY --from=backend-builder /app /app/backend
 
-# Copia frontend buildado
+# Copia frontend compilado
 COPY --from=frontend-builder /app/frontend/dist /usr/share/nginx/html
 
-# Copia configuração do Nginx
-COPY nginx.conf /etc/nginx/conf.d/default.conf
+# Copia arquivos de configuração
+COPY nginx.conf /etc/nginx/http.d/default.conf
+COPY start.sh /start.sh
 
-# Remove configuração padrão do Nginx se existir
-RUN rm -f /etc/nginx/sites-enabled/default
+# Torna o script executável
+RUN chmod +x /start.sh
 
-# Copia e configura script de inicialização
-COPY start.sh /app/start.sh
-RUN chmod +x /app/start.sh
-
-# Variáveis de ambiente padrão
+# Variáveis de ambiente
 ENV NODE_ENV=production \
     PORT=3001
 
 # Expõe porta 80
 EXPOSE 80
 
-# Health check com timeout maior
-HEALTHCHECK --interval=30s --timeout=15s --start-period=60s --retries=5 \
+# Health check mais simples
+HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
     CMD curl -f http://localhost/health || exit 1
 
 # Comando de inicialização
-CMD ["/app/start.sh"]
+CMD ["/start.sh"]
