@@ -42,14 +42,14 @@ RUN npm install --production
 
 # Variáveis de ambiente padrão
 ENV NODE_ENV=production \
-    PORT=3001
+    PORT=3000
 
-# Expõe porta 3001
-EXPOSE 3001
+# Expõe porta 3000
+EXPOSE 3000
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
-    CMD curl -f http://localhost:3001/health || exit 1
+    CMD curl -f http://localhost:3000/health || exit 1
 
 # Comando de inicialização
 CMD ["node", "server.js"]
