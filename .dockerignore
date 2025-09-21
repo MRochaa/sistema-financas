@@ -1,58 +1,44 @@
-# Ignorar node_modules em todos os diretórios
-**/node_modules
+# Node modules
 node_modules/
+*/node_modules/
+*/*/node_modules/
 
-# Ignorar arquivos de build
-**/dist
-**/build
-frontend/dist
-frontend/build
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
 
-# Ignorar arquivos de desenvolvimento
-**/.env.local
-**/.env.development
-**/.env.test
-
-# Ignorar logs
-**/*.log
-**/npm-debug.log*
-**/yarn-debug.log*
-**/yarn-error.log*
-
-# Ignorar arquivos do editor
-**/.vscode
-**/.idea
-**/*.swp
-**/*.swo
-**/~
-
-# Ignorar arquivos do Git
-.git
-.gitignore
-.gitattributes
-
-# Ignorar documentação
-README.md
-docs/
-*.md
-
-# Ignorar testes
-**/__tests__
-**/*.test.js
-**/*.spec.js
-**/coverage
-
-# Ignorar arquivos temporários
-**/tmp
-**/temp
-**/.cache
-
-# Ignorar arquivos do sistema
+# OS files
 .DS_Store
 Thumbs.db
 
-# Manter arquivos importantes
-!package.json
-!package-lock.json
-!frontend/package.json
-!backend/package.json
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# Build outputs
+dist/
+build/
+*/dist/
+*/build/
+
+# Git
+.git/
+.gitignore
+
+# Documentation
+README.md
+*.md
+
+# Tests
+__tests__/
+*.test.js
+*.spec.js
