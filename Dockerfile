@@ -5,12 +5,10 @@ FROM node:20-alpine AS frontend-builder
 
 WORKDIR /app
 
-# Copia package.json do frontend
+# Copia e instala dependências do frontend
 COPY frontend/package*.json ./frontend/
-
-# Instala todas as dependências do frontend
 WORKDIR /app/frontend
-RUN npm install
+RUN npm ci --only=production
 
 # Copia código do frontend
 WORKDIR /app
@@ -21,12 +19,12 @@ WORKDIR /app/frontend
 RUN npm run build
 
 # ============================================
-# ESTÁGIO 2: Build do Backend
+# ESTÁGIO 2: Build do Backend  
 # ============================================
 FROM node:20-alpine AS backend-builder
 
-# Instala dependências necessárias para Prisma
-RUN apk add --no-cache openssl libc6-compat
+# Instala dependências do sistema necessárias para Prisma
+RUN apk add --no-cache openssl openssl-dev libc6-compat
 
 WORKDIR /app
 
@@ -34,15 +32,15 @@ WORKDIR /app
 COPY backend/package*.json ./
 
 # Instala todas as dependências
-RUN npm install
+RUN npm ci
 
-# Copia código do backend
+# Copia todo o código do backend incluindo prisma
 COPY backend/ ./
 
-# Gera Prisma client
+# Gera o Prisma Client com os targets binários corretos
 RUN npx prisma generate
 
-# Remove devDependencies
+# Remove devDependencies mantendo apenas produção
 RUN npm prune --production
 
 # ============================================
@@ -50,14 +48,20 @@ RUN npm prune --production
 # ============================================
 FROM node:20-alpine
 
-# Instala nginx e ferramentas necessárias
-RUN apk add --no-cache nginx bash curl && \
-    rm -rf /var/cache/apk/*
+# Instala nginx, openssl e ferramentas necessárias
+RUN apk add --no-cache \
+    nginx \
+    bash \
+    curl \
+    openssl \
+    libc6-compat \
+    && rm -rf /var/cache/apk/*
 
-# Cria diretórios necessários
-RUN mkdir -p /var/log/nginx /var/cache/nginx /var/run /usr/share/nginx/html
+# Cria diretórios necessários com permissões corretas
+RUN mkdir -p /var/log/nginx /var/cache/nginx /var/run/nginx /usr/share/nginx/html \
+    && chown -R nginx:nginx /var/log/nginx /var/cache/nginx /var/run/nginx
 
-# Copia backend compilado
+# Copia backend compilado com node_modules e prisma client gerado
 COPY --from=backend-builder /app /app/backend
 
 # Copia frontend compilado
@@ -67,18 +71,21 @@ COPY --from=frontend-builder /app/frontend/dist /usr/share/nginx/html
 COPY nginx.conf /etc/nginx/http.d/default.conf
 COPY start.sh /start.sh
 
-# Torna o script executável
+# Ajusta permissões do script
 RUN chmod +x /start.sh
 
-# Variáveis de ambiente
+# Define diretório de trabalho
+WORKDIR /app/backend
+
+# Variáveis de ambiente padrão
 ENV NODE_ENV=production \
     PORT=3001
 
-# Expõe porta 80
+# Expõe porta 80 para nginx
 EXPOSE 80
 
-# Health check mais simples
-HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
+# Health check que verifica se nginx está respondendo
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
     CMD curl -f http://localhost/health || exit 1
 
 # Comando de inicialização
