@@ -8,7 +8,8 @@ WORKDIR /app
 # Copia e instala dependências do frontend
 COPY frontend/package*.json ./frontend/
 WORKDIR /app/frontend
-RUN npm ci --only=production
+# Usa npm install ao invés de npm ci
+RUN npm install --production
 
 # Copia código do frontend
 WORKDIR /app
@@ -19,7 +20,7 @@ WORKDIR /app/frontend
 RUN npm run build
 
 # ============================================
-# ESTÁGIO 2: Build do Backend  
+# ESTÁGIO 2: Build do Backend
 # ============================================
 FROM node:20-alpine AS backend-builder
 
@@ -31,8 +32,8 @@ WORKDIR /app
 # Copia package.json do backend
 COPY backend/package*.json ./
 
-# Instala todas as dependências
-RUN npm ci
+# Usa npm install ao invés de npm ci
+RUN npm install
 
 # Copia todo o código do backend incluindo prisma
 COPY backend/ ./
