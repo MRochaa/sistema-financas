@@ -1,199 +1,101 @@
-const express = require('express');
-const cors = require('cors');
-const helmet = require('helmet');
-const rateLimit = require('express-rate-limit');
-const path = require('path');
+# ============================================
+# ESTÁGIO 1: Build do Frontend
+# ============================================
+FROM node:20-alpine AS frontend-builder
 
-// Initialize Prisma with better error handling
-const { PrismaClient } = require('@prisma/client');
+WORKDIR /app
 
-let prisma;
+# Instala dependências necessárias para build
+RUN apk add --no-cache python3 make g++
 
-function initializePrisma() {
-  try {
-    prisma = new PrismaClient({
-      log: ['error', 'warn'],
-      errorFormat: 'minimal',
-      datasources: {
-        db: {
-          url: process.env.DATABASE_URL
-        }
-      }
-    });
-    return prisma;
-  } catch (error) {
-    console.error('Failed to initialize Prisma:', error);
-    return null;
-  }
-}
+# Copia arquivos de dependências do frontend
+COPY package*.json ./
 
-const app = express();
+# Instala dependências do frontend
+RUN npm install
 
-// Security middleware
-app.use(helmet({
-  contentSecurityPolicy: {
-    directives: {
-      defaultSrc: ["'self'"],
-      styleSrc: ["'self'", "'unsafe-inline'"],
-      scriptSrc: ["'self'"],
-      imgSrc: ["'self'", "data:", "https:"],
-      connectSrc: ["'self'"],
-      fontSrc: ["'self'"],
-      objectSrc: ["'none'"],
-      mediaSrc: ["'self'"],
-      frameSrc: ["'none'"],
-    },
-  },
-  crossOriginEmbedderPolicy: false
-}));
+# Copia código fonte do frontend
+COPY . .
 
-// CORS configuration
-app.use(cors({
-  origin: [
-    process.env.FRONTEND_URL || 'http://localhost:3000',
-    'https://esgcwcsso0go4ck4ogs8ko8o.82.25.65.212.sslip.io',
-    'https://es4ckok8g0k0sgo0w0o044kk.82.25.65.212.sslip.io',
-    /\.sslip\.io$/
-  ],
-  credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization']
-}));
+# Executa o build do frontend
+RUN npm run build
 
-// Rate limiting
-const limiter = rateLimit({
-  windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS) || 15 * 60 * 1000, // 15 minutes
-  max: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS) || 100, // limit each IP to 100 requests per windowMs
-  message: 'Too many requests from this IP, please try again later.',
-  standardHeaders: true,
-  legacyHeaders: false,
-});
+# ============================================
+# ESTÁGIO 2: Build do Backend
+# ============================================
+FROM node:20-alpine AS backend-builder
 
-app.use('/api/', limiter);
+WORKDIR /app
 
-// Body parsing middleware
-app.use(express.json({ limit: '10mb' }));
-app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+# Instala dependências necessárias para o Prisma no Alpine
+RUN apk add --no-cache \
+    openssl \
+    openssl-dev \
+    ca-certificates \
+    python3 \
+    make \
+    g++
 
-// Request logging
-app.use((req, res, next) => {
-  console.log(`${new Date().toISOString()} - ${req.method} ${req.url}`);
-  next();
-});
+# Copia arquivos de dependências do backend
+COPY backend/package*.json ./
+COPY backend/prisma ./prisma/
 
-// Health check with better database testing
-app.get('/health', async (req, res) => {
-  try {
-    // Initialize Prisma if not already done
-    if (!prisma) {
-      prisma = initializePrisma();
-    }
-    
-    let dbStatus = 'disconnected';
-    if (prisma) {
-      try {
-        await prisma.$executeRaw`SELECT 1`;
-        dbStatus = 'connected';
-      } catch (dbError) {
-        console.error('Database health check failed:', dbError.message);
-        dbStatus = 'error';
-      }
-    }
-    
-    res.json({
-      status: 'healthy',
-      timestamp: new Date().toISOString(),
-      uptime: process.uptime(),
-      environment: process.env.NODE_ENV || 'development',
-      database: dbStatus,
-      version: '1.0.0'
-    });
-  } catch (error) {
-    console.error('Health check failed:', error);
-    res.status(200).json({
-      status: 'unhealthy',
-      timestamp: new Date().toISOString(),
-      error: 'Application error',
-      details: error.message
-    });
-  }
-});
+# Instala dependências do backend
+RUN npm install
 
-// Import routes
-const authRoutes = require('./routes/auth');
-const categoryRoutes = require('./routes/categories');
-const transactionRoutes = require('./routes/transactions');
-const dashboardRoutes = require('./routes/dashboard');
+# Copia código fonte do backend
+COPY backend/ ./
 
-// API routes
-app.use('/api/auth', authRoutes);
-app.use('/api/categories', categoryRoutes);
-app.use('/api/transactions', transactionRoutes);
-app.use('/api/dashboard', dashboardRoutes);
+# Gera o Prisma Client
+RUN npx prisma generate
 
-// Serve static files from public directory (built frontend)
-app.use(express.static(path.join(__dirname, '../public')));
+# ============================================
+# ESTÁGIO 3: Imagem Final de Produção
+# ============================================
+FROM node:20-alpine
 
-// 404 handler for API routes
-app.use('/api/*', (req, res) => {
-  res.status(404).json({ error: 'API endpoint not found' });
-});
+# Instala dependências necessárias para produção
+RUN apk add --no-cache \
+    curl \
+    postgresql-client \
+    openssl \
+    ca-certificates \
+    libc6-compat \
+    coreutils \
+    bash
 
-// Catch all handler: send back React's index.html file for client-side routing
-app.get('*', (req, res) => {
-  try {
-    res.sendFile(path.join(__dirname, '../public', 'index.html'));
-  } catch (error) {
-    console.error('Static file error:', error);
-    res.status(500).send('Error serving application');
-  }
-});
+# Cria usuário não-root para segurança
+RUN addgroup -g 1001 -S nodejs && \
+    adduser -S nextjs -u 1001
 
-// Global error handler
-app.use((err, req, res, next) => {
-  console.error('Unhandled error:', err);
-  
-  const isDevelopment = process.env.NODE_ENV === 'development';
-  
-  res.status(err.status || 500).json({
-    error: isDevelopment ? err.message : 'Internal server error',
-    ...(isDevelopment && { stack: err.stack })
-  });
-});
+# Cria diretórios necessários
+WORKDIR /app
 
-const PORT = process.env.PORT || 3000;
+# Copia frontend compilado
+COPY --from=frontend-builder --chown=nextjs:nodejs /app/dist ./public
 
-// Test database connection before starting server
-async function startServer() {
-  try {
-    console.log('✅ Database connected successfully');
-    
-    app.listen(PORT, '0.0.0.0', () => {
-      console.log(`🚀 Sistema Finanças do Lar running on port ${PORT}`);
-      console.log(`📊 Environment: ${process.env.NODE_ENV || 'development'}`);
-      console.log(`🔗 Health check: http://localhost:${PORT}/health`);
-      console.log(`🗄️ Database: ${process.env.POSTGRES_DB}`);
-    });
-  } catch (error) {
-    console.error('❌ Failed to connect to database:', error);
-    console.error('🔄 Retrying in 10 seconds...');
-    setTimeout(startServer, 10000);
-  }
-}
+# Copia backend compilado
+COPY --from=backend-builder --chown=nextjs:nodejs /app ./
 
-startServer();
+# Copia script de inicialização do backend
+COPY --chown=nextjs:nodejs backend/start.sh /app/start.sh
 
-// Graceful shutdown
-process.on('SIGTERM', async () => {
-  console.log('SIGTERM received, shutting down gracefully');
-  await prisma.$disconnect();
-  process.exit(0);
-});
+# Define permissões
+RUN chmod +x /app/start.sh
 
-process.on('SIGINT', async () => {
-  console.log('SIGINT received, shutting down gracefully');
-  await prisma.$disconnect();
-  process.exit(0);
-});
+# Muda para usuário não-root
+USER nextjs
 
-module.exports = app;
+# Variáveis de ambiente padrão
+ENV NODE_ENV=production \
+    PORT=3000
+
+# Expõe porta 3000
+EXPOSE 3000
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=300s --retries=3 \
+    CMD curl -f http://localhost:3000/health || exit 1
+
+# Comando de inicialização
+CMD ["/app/start.sh"]

@@ -163,22 +163,33 @@ app.use((err, req, res, next) => {
 
 const PORT = process.env.PORT || 3000;
 
-// Test database connection before starting server
+// Start server without waiting for database
 async function startServer() {
   try {
-    await prisma.$connect();
-    console.log('✅ Database connected successfully');
+    // Initialize Prisma
+    if (!prisma) {
+      prisma = initializePrisma();
+    }
+    
+    // Try to connect to database, but don't fail if it's not available
+    if (prisma) {
+      try {
+        await prisma.$connect();
+        console.log('✅ Database connected successfully');
+      } catch (error) {
+        console.error('⚠️ Database connection failed, but starting server anyway:', error.message);
+      }
+    }
     
     app.listen(PORT, '0.0.0.0', () => {
       console.log(`🚀 Sistema Finanças do Lar running on port ${PORT}`);
       console.log(`📊 Environment: ${process.env.NODE_ENV || 'development'}`);
       console.log(`🔗 Health check: http://localhost:${PORT}/health`);
-      console.log(`🗄️ Database: ${process.env.POSTGRES_DB}`);
+      console.log(`🗄️ Database: ${process.env.FINANCAS_POSTGRES_DB || 'Not configured'}`);
     });
   } catch (error) {
-    console.error('❌ Failed to connect to database:', error);
-    console.error('🔄 Retrying in 10 seconds...');
-    setTimeout(startServer, 10000);
+    console.error('❌ Failed to start server:', error);
+    process.exit(1);
   }
 }
 
@@ -187,13 +198,17 @@ startServer();
 // Graceful shutdown
 process.on('SIGTERM', async () => {
   console.log('SIGTERM received, shutting down gracefully');
-  await prisma.$disconnect();
+  if (prisma) {
+    await prisma.$disconnect();
+  }
   process.exit(0);
 });
 
 process.on('SIGINT', async () => {
   console.log('SIGINT received, shutting down gracefully');
-  await prisma.$disconnect();
+  if (prisma) {
+    await prisma.$disconnect();
+  }
   process.exit(0);
 });
 
