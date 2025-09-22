@@ -24,9 +24,7 @@ services:
 
   # Aplicação completa
   app:
-    build: 
-      context: .
-      dockerfile: Dockerfile
+    image: esgcwcsso0go4ck4ogs8ko8o:${SOURCE_COMMIT}
     container_name: financas-app
     environment:
       # Database
@@ -60,7 +58,7 @@ services:
       test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
       interval: 30s
       timeout: 10s
-      start_period: 120s
+      start_period: 180s
       retries: 3
 
 volumes:

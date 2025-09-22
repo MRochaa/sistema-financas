@@ -4,7 +4,13 @@ const { PrismaClient } = require('@prisma/client');
 const auth = require('../middleware/auth');
 
 const router = express.Router();
-const prisma = new PrismaClient();
+const prisma = new PrismaClient({
+  datasources: {
+    db: {
+      url: process.env.DATABASE_URL
+    }
+  }
+});
 
 // Input sanitization
 const sanitizeInput = (input) => {

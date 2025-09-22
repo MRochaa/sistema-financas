@@ -2,13 +2,22 @@ const { PrismaClient } = require('@prisma/client');
 
 const prisma = new PrismaClient({
   log: ['error', 'warn'],
-  errorFormat: 'minimal'
+  errorFormat: 'minimal',
+  datasources: {
+    db: {
+      url: process.env.DATABASE_URL
+    }
+  }
 });
 
 async function main() {
   console.log('🌱 Starting database seeding...');
 
   try {
+    // Test connection first
+    await prisma.$connect();
+    console.log('✅ Database connection established');
+
     // Check if categories already exist
     const existingCategories = await prisma.category.count();
     
@@ -16,6 +25,8 @@ async function main() {
       console.log('📊 Categories already exist, skipping seed');
       return;
     }
+
+    console.log('📝 Creating default categories...');
 
     // Create default categories
     const categories = [
@@ -47,16 +58,22 @@ async function main() {
     }
 
     // Create categories for the first user
+    let createdCount = 0;
     for (const category of categories) {
-      await prisma.category.create({
-        data: {
-          ...category,
-          userId: firstUser.id
-        }
-      });
+      try {
+        await prisma.category.create({
+          data: {
+            ...category,
+            userId: firstUser.id
+          }
+        });
+        createdCount++;
+      } catch (error) {
+        console.error(`Error creating category ${category.name}:`, error.message);
+      }
     }
 
-    console.log(`✅ Created ${categories.length} default categories`);
+    console.log(`✅ Created ${createdCount} default categories`);
     console.log('🎉 Database seeding completed successfully!');
 
   } catch (error) {

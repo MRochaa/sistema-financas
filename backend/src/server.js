@@ -9,7 +9,12 @@ const { PrismaClient } = require('@prisma/client');
 
 const prisma = new PrismaClient({
   log: ['error', 'warn'],
-  errorFormat: 'minimal'
+  errorFormat: 'minimal',
+  datasources: {
+    db: {
+      url: process.env.DATABASE_URL
+    }
+  }
 });
 
 const app = express();
@@ -61,25 +66,27 @@ app.use((req, res, next) => {
   next();
 });
 
-// Health check
+// Health check with better database testing
 app.get('/health', async (req, res) => {
   try {
-    // Test database connection
-    await prisma.$queryRaw`SELECT 1`;
+    // Test database connection with a simple query
+    await prisma.$executeRaw`SELECT 1`;
     
     res.json({
       status: 'healthy',
       timestamp: new Date().toISOString(),
       uptime: process.uptime(),
       environment: process.env.NODE_ENV || 'development',
-      database: 'connected'
+      database: 'connected',
+      version: '1.0.0'
     });
   } catch (error) {
     console.error('Health check failed:', error);
     res.status(503).json({
       status: 'unhealthy',
       timestamp: new Date().toISOString(),
-      error: 'Database connection failed'
+      error: 'Database connection failed',
+      details: error.message
     });
   }
 });
@@ -128,11 +135,27 @@ app.use((err, req, res, next) => {
 
 const PORT = process.env.PORT || 3000;
 
-app.listen(PORT, '0.0.0.0', () => {
-  console.log(`🚀 Sistema Finanças do Lar running on port ${PORT}`);
-  console.log(`📊 Environment: ${process.env.NODE_ENV || 'development'}`);
-  console.log(`🔗 Health check: http://localhost:${PORT}/health`);
-});
+// Test database connection before starting server
+async function startServer() {
+  try {
+    console.log('🔗 Testing database connection...');
+    await prisma.$connect();
+    console.log('✅ Database connected successfully');
+    
+    app.listen(PORT, '0.0.0.0', () => {
+      console.log(`🚀 Sistema Finanças do Lar running on port ${PORT}`);
+      console.log(`📊 Environment: ${process.env.NODE_ENV || 'development'}`);
+      console.log(`🔗 Health check: http://localhost:${PORT}/health`);
+      console.log(`🗄️ Database: ${process.env.POSTGRES_DB}`);
+    });
+  } catch (error) {
+    console.error('❌ Failed to connect to database:', error);
+    console.error('🔄 Retrying in 5 seconds...');
+    setTimeout(startServer, 5000);
+  }
+}
+
+startServer();
 
 // Graceful shutdown
 process.on('SIGTERM', async () => {
