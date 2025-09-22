@@ -56,7 +56,7 @@ RUN apk add --no-cache \
     ca-certificates \
     libc6-compat \
     coreutils \
-    timeout
+    bash
 
 # Cria usuário não-root para segurança
 RUN addgroup -g 1001 -S nodejs && \
@@ -72,7 +72,7 @@ COPY --from=frontend-builder --chown=nextjs:nodejs /app/dist ./public
 COPY --from=backend-builder --chown=nextjs:nodejs /app ./
 
 # Copia script de inicialização
-COPY --from=backend-builder --chown=nextjs:nodejs /app/start.sh /app/start.sh
+COPY --chown=nextjs:nodejs backend/start.sh /app/start.sh
 
 # Define permissões
 RUN chmod +x /app/start.sh

@@ -41,11 +41,7 @@ export const useAuth = () => {
   return context;
 };
 
-// API configuration - use relative URLs in production
-const API_URL = '/api';
-
 // Configure axios defaults
-axios.defaults.baseURL = API_URL;
 axios.defaults.timeout = 10000; // 10 second timeout
 
 // Add request interceptor for security headers
