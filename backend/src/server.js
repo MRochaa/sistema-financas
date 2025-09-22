@@ -150,8 +150,8 @@ async function startServer() {
     });
   } catch (error) {
     console.error('❌ Failed to connect to database:', error);
-    console.error('🔄 Retrying in 5 seconds...');
-    setTimeout(startServer, 5000);
+    console.error('🔄 Retrying in 10 seconds...');
+    setTimeout(startServer, 10000);
   }
 }
 

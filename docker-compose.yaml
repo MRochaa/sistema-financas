@@ -24,7 +24,9 @@ services:
 
   # Aplicação completa
   app:
-    image: esgcwcsso0go4ck4ogs8ko8o:${SOURCE_COMMIT}
+    build: 
+      context: .
+      dockerfile: Dockerfile
     container_name: financas-app
     environment:
       # Database

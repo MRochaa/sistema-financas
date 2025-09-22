@@ -54,7 +54,9 @@ RUN apk add --no-cache \
     postgresql-client \
     openssl \
     ca-certificates \
-    libc6-compat
+    libc6-compat \
+    coreutils \
+    timeout
 
 # Cria usuário não-root para segurança
 RUN addgroup -g 1001 -S nodejs && \
@@ -86,7 +88,7 @@ ENV NODE_ENV=production \
 EXPOSE 3000
 
 # Health check
-HEALTHCHECK --interval=30s --timeout=10s --start-period=180s --retries=3 \
+HEALTHCHECK --interval=30s --timeout=10s --start-period=300s --retries=3 \
     CMD curl -f http://localhost:3000/health || exit 1
 
 # Comando de inicialização
