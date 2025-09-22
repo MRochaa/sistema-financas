@@ -55,31 +55,33 @@ WORKDIR /app
 COPY --from=frontend-builder /app/dist ./public
 
 # Copia backend compilado
-COPY --from=backend-builder --chown=nextjs:nodejs /app ./
+COPY --from=backend-builder /app ./
 
-# Cria script de inicialização
-RUN echo '#!/bin/sh\n\
-echo "🚀 Starting Finanças do Lar System..."\n\
-echo "📊 Environment: $NODE_ENV"\n\
-echo "🔗 Port: $PORT"\n\
-\n\
-# Wait for database to be ready\n\
-echo "⏳ Waiting for database..."\n\
-until pg_isready -h postgres -p 5432 -U $POSTGRES_USER; do\n\
-  echo "Database is unavailable - sleeping"\n\
-  sleep 2\n\
-done\n\
-echo "✅ Database is ready!"\n\
-\n\
-# Run database migrations\n\
-echo "🔄 Running database migrations..."\n\
-npx prisma migrate deploy\n\
-\n\
-# Start the application\n\
-echo "🎯 Starting application..."\n\
-exec node src/server.js' > /app/start.sh
+# Cria script de inicialização como root primeiro
+RUN echo '#!/bin/sh' > /app/start.sh && \
+    echo 'echo "🚀 Starting Finanças do Lar System..."' >> /app/start.sh && \
+    echo 'echo "📊 Environment: $NODE_ENV"' >> /app/start.sh && \
+    echo 'echo "🔗 Port: $PORT"' >> /app/start.sh && \
+    echo '' >> /app/start.sh && \
+    echo '# Wait for database to be ready' >> /app/start.sh && \
+    echo 'echo "⏳ Waiting for database..."' >> /app/start.sh && \
+    echo 'until pg_isready -h postgres -p 5432 -U $POSTGRES_USER; do' >> /app/start.sh && \
+    echo '  echo "Database is unavailable - sleeping"' >> /app/start.sh && \
+    echo '  sleep 2' >> /app/start.sh && \
+    echo 'done' >> /app/start.sh && \
+    echo 'echo "✅ Database is ready!"' >> /app/start.sh && \
+    echo '' >> /app/start.sh && \
+    echo '# Run database migrations' >> /app/start.sh && \
+    echo 'echo "🔄 Running database migrations..."' >> /app/start.sh && \
+    echo 'npx prisma migrate deploy' >> /app/start.sh && \
+    echo '' >> /app/start.sh && \
+    echo '# Start the application' >> /app/start.sh && \
+    echo 'echo "🎯 Starting application..."' >> /app/start.sh && \
+    echo 'exec node src/server.js' >> /app/start.sh
 
-RUN chmod +x /app/start.sh
+# Define permissões e proprietário do script
+RUN chmod +x /app/start.sh && \
+    chown -R nextjs:nodejs /app
 
 # Muda para usuário não-root
 USER nextjs
