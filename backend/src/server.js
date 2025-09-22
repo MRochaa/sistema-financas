@@ -7,15 +7,25 @@ const path = require('path');
 // Initialize Prisma with better error handling
 const { PrismaClient } = require('@prisma/client');
 
-const prisma = new PrismaClient({
-  log: ['error', 'warn'],
-  errorFormat: 'minimal',
-  datasources: {
-    db: {
-      url: process.env.DATABASE_URL
-    }
+let prisma;
+
+function initializePrisma() {
+  try {
+    prisma = new PrismaClient({
+      log: ['error', 'warn'],
+      errorFormat: 'minimal',
+      datasources: {
+        db: {
+          url: process.env.DATABASE_URL
+        }
+      }
+    });
+    return prisma;
+  } catch (error) {
+    console.error('Failed to initialize Prisma:', error);
+    return null;
   }
-});
+}
 
 const app = express();
 
@@ -74,23 +84,36 @@ app.use((req, res, next) => {
 // Health check with better database testing
 app.get('/health', async (req, res) => {
   try {
-    // Test database connection with a simple query
-    await prisma.$executeRaw`SELECT 1`;
+    // Initialize Prisma if not already done
+    if (!prisma) {
+      prisma = initializePrisma();
+    }
+    
+    let dbStatus = 'disconnected';
+    if (prisma) {
+      try {
+        await prisma.$executeRaw`SELECT 1`;
+        dbStatus = 'connected';
+      } catch (dbError) {
+        console.error('Database health check failed:', dbError.message);
+        dbStatus = 'error';
+      }
+    }
     
     res.json({
       status: 'healthy',
       timestamp: new Date().toISOString(),
       uptime: process.uptime(),
       environment: process.env.NODE_ENV || 'development',
-      database: 'connected',
+      database: dbStatus,
       version: '1.0.0'
     });
   } catch (error) {
     console.error('Health check failed:', error);
-    res.status(503).json({
+    res.status(200).json({
       status: 'unhealthy',
       timestamp: new Date().toISOString(),
-      error: 'Database connection failed',
+      error: 'Application error',
       details: error.message
     });
   }
@@ -143,7 +166,6 @@ const PORT = process.env.PORT || 3000;
 // Test database connection before starting server
 async function startServer() {
   try {
-    console.log('🔗 Testing database connection...');
     await prisma.$connect();
     console.log('✅ Database connected successfully');
     

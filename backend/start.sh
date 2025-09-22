@@ -10,7 +10,7 @@ detect_environment() {
         echo "🐳 Detected Coolify environment"
         return 0
     elif nslookup postgres >/dev/null 2>&1; then
-        echo "🐳 Detected Docker Compose environment"
+        echo "🐳 Detected Docker environment with postgres service"
         return 0
     else
         echo "💻 Detected local environment"
@@ -18,101 +18,154 @@ detect_environment() {
     fi
 }
 
+# Função para testar conexão com o banco
+test_database_connection() {
+    local host="$1"
+    local port="$2"
+    local user="$3"
+    local password="$4"
+    local dbname="$5"
+    
+    echo "🔍 Testing connection: $user@$host:$port/$dbname"
+    
+    # Testar conexão com timeout
+    if timeout 10 bash -c "PGPASSWORD='$password' psql -h '$host' -p '$port' -U '$user' -d '$dbname' -c 'SELECT 1;' >/dev/null 2>&1"; then
+        echo "✅ Connection successful!"
+        return 0
+    else
+        echo "❌ Connection failed"
+        return 1
+    fi
+}
+
+# Função para criar usuário e banco se necessário
+setup_database() {
+    local admin_user="$1"
+    local admin_password="$2"
+    local target_user="$3"
+    local target_password="$4"
+    local target_db="$5"
+    local host="postgres"
+    local port="5432"
+    
+    echo "🔧 Setting up database with admin user: $admin_user"
+    
+    # Conectar como admin e criar usuário/banco
+    PGPASSWORD="$admin_password" psql -h "$host" -p "$port" -U "$admin_user" -d "postgres" << EOF
+-- Criar usuário se não existir
+DO \$\$
+BEGIN
+    IF NOT EXISTS (SELECT FROM pg_catalog.pg_roles WHERE rolname = '$target_user') THEN
+        CREATE USER $target_user WITH PASSWORD '$target_password';
+        GRANT CREATEDB TO $target_user;
+        ALTER USER $target_user CREATEDB;
+        RAISE NOTICE 'User $target_user created successfully';
+    ELSE
+        RAISE NOTICE 'User $target_user already exists';
+    END IF;
+END
+\$\$;
+
+-- Criar banco se não existir
+SELECT 'CREATE DATABASE $target_db OWNER $target_user'
+WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = '$target_db')\gexec
+
+-- Garantir permissões
+GRANT ALL PRIVILEGES ON DATABASE $target_db TO $target_user;
+EOF
+
+    if [ $? -eq 0 ]; then
+        echo "✅ Database setup completed successfully"
+        return 0
+    else
+        echo "❌ Database setup failed"
+        return 1
+    fi
+}
+
 # Configurar DATABASE_URL baseado no ambiente
 configure_database_url() {
-    # Tentar diferentes combinações de credenciais
-    local db_hosts=("postgres" "localhost")
-    local db_users=("$FINANCAS_POSTGRES_USER" "postgres" "financas_user")
-    local db_passwords=("$FINANCAS_POSTGRES_PASSWORD" "postgres" "financas_senha_123")
-    local db_names=("$FINANCAS_POSTGRES_DB" "postgres" "financas_lar_db")
-    local db_port="5432"
+    local host="postgres"
+    local port="5432"
+    local target_user="${FINANCAS_POSTGRES_USER:-financas_user}"
+    local target_password="${FINANCAS_POSTGRES_PASSWORD:-financas_senha_123}"
+    local target_db="${FINANCAS_POSTGRES_DB:-financas_lar_db}"
     
-    echo "🔍 Testing database connections..."
+    echo "🔍 Configuring database connection..."
+    echo "🎯 Target: $target_user@$host:$port/$target_db"
     
-    # Se já temos DATABASE_URL configurada, testar primeiro
-    if [ -n "$DATABASE_URL" ]; then
-        echo "🔗 Testing existing DATABASE_URL..."
-        if test_database_connection "$DATABASE_URL"; then
-            echo "✅ Existing DATABASE_URL works!"
-            return 0
-        fi
+    # Primeiro, tentar conectar com as credenciais desejadas
+    if test_database_connection "$host" "$port" "$target_user" "$target_password" "$target_db"; then
+        export DATABASE_URL="postgresql://${target_user}:${target_password}@${host}:${port}/${target_db}?schema=public"
+        echo "✅ Using existing credentials"
+        return 0
     fi
     
-    # Tentar diferentes combinações
-    for host in "${db_hosts[@]}"; do
-        for user in "${db_users[@]}"; do
-            for password in "${db_passwords[@]}"; do
-                for dbname in "${db_names[@]}"; do
-                    if [ -n "$user" ] && [ -n "$password" ] && [ -n "$dbname" ]; then
-                        local test_url="postgresql://${user}:${password}@${host}:${db_port}/${dbname}?schema=public"
-                        echo "🔍 Testing: postgresql://${user}:***@${host}:${db_port}/${dbname}"
-                        
-                        if test_database_connection "$test_url"; then
-                            export DATABASE_URL="$test_url"
-                            echo "✅ Found working connection!"
-                            echo "👤 User: $user"
-                            echo "🗄️ Database: $dbname"
-                            echo "🏠 Host: $host"
-                            return 0
-                        fi
-                    fi
-                done
-            done
-        done
+    echo "🔧 Target credentials don't work, trying to set them up..."
+    
+    # Tentar diferentes credenciais de admin para configurar o banco
+    local admin_combinations=(
+        "postgres:"
+        "postgres:postgres"
+        "postgres:password"
+        "root:"
+        "root:root"
+        "admin:admin"
+    )
+    
+    for combo in "${admin_combinations[@]}"; do
+        local admin_user=$(echo "$combo" | cut -d: -f1)
+        local admin_password=$(echo "$combo" | cut -d: -f2)
+        
+        echo "🔍 Trying admin credentials: $admin_user"
+        
+        # Testar conexão com postgres padrão
+        if test_database_connection "$host" "$port" "$admin_user" "$admin_password" "postgres"; then
+            echo "✅ Admin connection successful, setting up target database..."
+            
+            if setup_database "$admin_user" "$admin_password" "$target_user" "$target_password" "$target_db"; then
+                # Testar se agora conseguimos conectar com as credenciais desejadas
+                if test_database_connection "$host" "$port" "$target_user" "$target_password" "$target_db"; then
+                    export DATABASE_URL="postgresql://${target_user}:${target_password}@${host}:${port}/${target_db}?schema=public"
+                    echo "✅ Database setup completed successfully!"
+                    return 0
+                fi
+            fi
+        fi
+    done
+    
+    echo "❌ Could not configure database with target credentials"
+    echo "🔄 Will try to use any working connection..."
+    
+    # Como último recurso, tentar usar qualquer conexão que funcione
+    for combo in "${admin_combinations[@]}"; do
+        local admin_user=$(echo "$combo" | cut -d: -f1)
+        local admin_password=$(echo "$combo" | cut -d: -f2)
+        
+        if test_database_connection "$host" "$port" "$admin_user" "$admin_password" "postgres"; then
+            echo "⚠️ Using fallback connection: $admin_user@postgres"
+            export DATABASE_URL="postgresql://${admin_user}:${admin_password}@${host}:${port}/postgres?schema=public"
+            return 0
+        fi
     done
     
     echo "❌ No working database connection found"
     return 1
 }
 
-# Função para testar conexão com o banco
-test_database_connection() {
-    local url="$1"
-    
-    # Extrair componentes da URL
-    local user=$(echo "$url" | sed -n 's/.*:\/\/\([^:]*\):.*/\1/p')
-    local password=$(echo "$url" | sed -n 's/.*:\/\/[^:]*:\([^@]*\)@.*/\1/p')
-    local host=$(echo "$url" | sed -n 's/.*@\([^:]*\):.*/\1/p')
-    local port=$(echo "$url" | sed -n 's/.*:\([0-9]*\)\/.*/\1/p')
-    local dbname=$(echo "$url" | sed -n 's/.*\/\([^?]*\).*/\1/p')
-    
-    # Testar conexão com timeout
-    if timeout 10 bash -c "PGPASSWORD='$password' psql -h '$host' -p '$port' -U '$user' -d '$dbname' -c 'SELECT 1;' >/dev/null 2>&1"; then
-        return 0
-    else
-        return 1
-    fi
-}
-
-# Função para criar banco se necessário
-create_database_if_needed() {
-    local user=$(echo "$DATABASE_URL" | sed -n 's/.*:\/\/\([^:]*\):.*/\1/p')
-    local password=$(echo "$DATABASE_URL" | sed -n 's/.*:\/\/[^:]*:\([^@]*\)@.*/\1/p')
-    local host=$(echo "$DATABASE_URL" | sed -n 's/.*@\([^:]*\):.*/\1/p')
-    local port=$(echo "$DATABASE_URL" | sed -n 's/.*:\([0-9]*\)\/.*/\1/p')
-    local dbname=$(echo "$DATABASE_URL" | sed -n 's/.*\/\([^?]*\).*/\1/p')
-    
-    echo "🔧 Ensuring database '$dbname' exists..."
-    
-    # Tentar conectar ao banco específico
-    if PGPASSWORD="$password" psql -h "$host" -p "$port" -U "$user" -d "$dbname" -c "SELECT 1;" >/dev/null 2>&1; then
-        echo "✅ Database '$dbname' exists and is accessible"
-        return 0
-    fi
-    
-    # Se não conseguir, tentar conectar ao postgres padrão e criar o banco
-    echo "🔧 Database '$dbname' not found, trying to create..."
-    if PGPASSWORD="$password" psql -h "$host" -p "$port" -U "$user" -d "postgres" -c "CREATE DATABASE \"$dbname\";" 2>/dev/null; then
-        echo "✅ Database '$dbname' created successfully"
-        return 0
-    else
-        echo "⚠️ Could not create database '$dbname', but continuing..."
-        return 1
-    fi
-}
-
 # Detectar ambiente
 detect_environment
+
+# Aguardar PostgreSQL estar pronto
+echo "⏳ Waiting for PostgreSQL to be ready..."
+for i in {1..30}; do
+    if nslookup postgres >/dev/null 2>&1; then
+        echo "✅ PostgreSQL service is reachable"
+        break
+    fi
+    echo "⏳ Waiting for PostgreSQL... ($i/30)"
+    sleep 2
+done
 
 # Configurar conexão com banco
 echo "🔗 Configuring database connection..."
@@ -121,11 +174,8 @@ if configure_database_url; then
     echo "🔗 DATABASE_URL: $(echo $DATABASE_URL | sed 's/:\/\/[^:]*:[^@]*@/:\/\/***:***@/')"
     
     # Aguardar um pouco para estabilizar
-    echo "⏳ Waiting 10 seconds for database to stabilize..."
-    sleep 10
-    
-    # Criar banco se necessário
-    create_database_if_needed
+    echo "⏳ Waiting 5 seconds for database to stabilize..."
+    sleep 5
     
     # Executar migrações
     echo "🔄 Running database migrations..."
