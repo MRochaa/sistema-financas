@@ -93,9 +93,5 @@ ENV NODE_ENV=production \
 # Expõe porta 3000
 EXPOSE 3000
 
-# Health check
-HEALTHCHECK --interval=30s --timeout=10s --start-period=300s --retries=3 \
-    CMD curl -f http://localhost:3000/health || exit 1
-
-# Comando de inicialização
+# Comando de inicialização (sem healthcheck customizado)
 CMD ["/app/start.sh"]

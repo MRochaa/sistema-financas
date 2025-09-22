@@ -4,81 +4,33 @@ echo "🚀 Starting Finanças do Lar System..."
 echo "📊 Environment: $NODE_ENV"
 echo "🔗 Port: $PORT"
 
-# Função para detectar se estamos no Coolify
-detect_environment() {
-    if [ -n "$COOLIFY_CONTAINER_NAME" ] || [ -n "$COOLIFY_URL" ]; then
-        echo "🐳 Detected Coolify environment"
-        return 0
-    else
-        echo "💻 Detected local environment"
-        return 1
-    fi
-}
+# Configurar DATABASE_URL usando as variáveis do Coolify
+if [ -n "$FINANCAS_POSTGRES_USER" ] && [ -n "$FINANCAS_POSTGRES_PASSWORD" ] && [ -n "$FINANCAS_POSTGRES_DB" ]; then
+    # Usar host interno do PostgreSQL do Coolify
+    export DATABASE_URL="postgresql://${FINANCAS_POSTGRES_USER}:${FINANCAS_POSTGRES_PASSWORD}@q8oo8gc4c8c4c0ccs4g800ws:5432/${FINANCAS_POSTGRES_DB}?schema=public"
+    echo "✅ DATABASE_URL configured from Coolify variables"
+    echo "🔗 Host: q8oo8gc4c8c4c0ccs4g800ws:5432"
+    echo "👤 User: $FINANCAS_POSTGRES_USER"
+    echo "🗄️ Database: $FINANCAS_POSTGRES_DB"
+else
+    echo "⚠️ Using default DATABASE_URL from environment"
+fi
 
-# Função para testar conexão com o banco usando psql
-test_database_connection() {
-    local host="$1"
-    local port="$2"
-    local user="$3"
-    local password="$4"
-    local dbname="$5"
+# Aguardar PostgreSQL estar pronto (máximo 60 segundos)
+echo "⏳ Waiting for PostgreSQL to be ready..."
+for i in {1..12}; do
+    if PGPASSWORD="$FINANCAS_POSTGRES_PASSWORD" psql -h "q8oo8gc4c8c4c0ccs4g800ws" -p 5432 -U "$FINANCAS_POSTGRES_USER" -d "$FINANCAS_POSTGRES_DB" -c "SELECT 1;" >/dev/null 2>&1; then
+        echo "✅ PostgreSQL is ready!"
+        break
+    else
+        echo "⏳ Attempt $i/12: PostgreSQL not ready yet, waiting 5 seconds..."
+        sleep 5
+    fi
     
-    echo "🔍 Testing connection: $user@$host:$port/$dbname"
-    
-    # Testar conexão com timeout usando psql
-    if timeout 10 bash -c "PGPASSWORD='$password' psql -h '$host' -p '$port' -U '$user' -d '$dbname' -c 'SELECT 1;' >/dev/null 2>&1"; then
-        echo "✅ Connection successful!"
-        return 0
-    else
-        echo "❌ Connection failed"
-        return 1
+    if [ $i -eq 12 ]; then
+        echo "⚠️ PostgreSQL not ready after 60 seconds, but continuing..."
     fi
-}
-
-# Função para configurar DATABASE_URL baseado no ambiente
-configure_database_url() {
-    if detect_environment; then
-        # No Coolify, usar as variáveis de ambiente fornecidas
-        local db_host="q8oo8gc4c8c4c0ccs4g800ws"  # Host interno do PostgreSQL no Coolify
-        local db_port="5432"
-        local db_user="${FINANCAS_POSTGRES_USER:-financas_user}"
-        local db_password="${FINANCAS_POSTGRES_PASSWORD:-financas_senha_123}"
-        local db_name="${FINANCAS_POSTGRES_DB:-financas_lar_db}"
-        
-        echo "🐳 Coolify environment detected"
-        echo "🎯 Target: $db_user@$db_host:$db_port/$db_name"
-        
-        # Construir DATABASE_URL
-        export DATABASE_URL="postgresql://${db_user}:${db_password}@${db_host}:${db_port}/${db_name}?schema=public"
-        
-        echo "✅ DATABASE_URL configured for Coolify"
-        echo "🔗 DATABASE_URL: $(echo $DATABASE_URL | sed 's/:\/\/[^:]*:[^@]*@/:\/\/***:***@/')"
-        
-        # Aguardar um pouco para o PostgreSQL estar pronto
-        echo "⏳ Waiting 10 seconds for PostgreSQL to be ready..."
-        sleep 10
-        
-        # Testar conexão
-        if test_database_connection "$db_host" "$db_port" "$db_user" "$db_password" "$db_name"; then
-            echo "✅ Database connection verified"
-            return 0
-        else
-            echo "❌ Database connection failed, but continuing..."
-            return 1
-        fi
-    else
-        # Ambiente local - usar configuração padrão
-        echo "💻 Local environment - using default DATABASE_URL"
-        return 0
-    fi
-}
-
-# Detectar ambiente
-detect_environment
-
-# Configurar conexão com banco
-echo "🔗 Configuring database connection..."
-configure_database_url
+done
 
 # Executar migrações
 echo "🔄 Running database migrations..."
