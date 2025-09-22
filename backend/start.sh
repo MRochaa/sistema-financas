@@ -4,103 +4,153 @@ echo "🚀 Starting Finanças do Lar System..."
 echo "📊 Environment: $NODE_ENV"
 echo "🔗 Port: $PORT"
 
-# Configurar DATABASE_URL baseado nas variáveis do Coolify
-if [ -n "$FINANCAS_POSTGRES_DB" ] && [ -n "$FINANCAS_POSTGRES_USER" ] && [ -n "$FINANCAS_POSTGRES_PASSWORD" ]; then
-    # Detectar se estamos no Coolify (procurar por serviços com nomes específicos)
-    if nslookup postgres >/dev/null 2>&1; then
-        # Estamos no Coolify, usar nome do serviço PostgreSQL
-        export DATABASE_URL="postgresql://${FINANCAS_POSTGRES_USER}:${FINANCAS_POSTGRES_PASSWORD}@postgres:5432/${FINANCAS_POSTGRES_DB}?schema=public"
-        echo "🗄️ Database URL configured for Coolify"
+# Função para detectar se estamos no Coolify
+detect_environment() {
+    if [ -n "$COOLIFY_CONTAINER_NAME" ] || [ -n "$COOLIFY_URL" ]; then
+        echo "🐳 Detected Coolify environment"
+        return 0
+    elif nslookup postgres >/dev/null 2>&1; then
+        echo "🐳 Detected Docker Compose environment"
+        return 0
     else
-        # Fallback para localhost
-        export DATABASE_URL="postgresql://${FINANCAS_POSTGRES_USER}:${FINANCAS_POSTGRES_PASSWORD}@localhost:5432/${FINANCAS_POSTGRES_DB}?schema=public"
-        echo "🗄️ Database URL configured for localhost"
+        echo "💻 Detected local environment"
+        return 1
     fi
-    echo "🗄️ Database: $FINANCAS_POSTGRES_DB"
-    echo "👤 User: $FINANCAS_POSTGRES_USER"
-fi
-
-echo "🔗 DATABASE_URL: ${DATABASE_URL}"
-
-# Aguardar um pouco para o banco estar pronto
-echo "⏳ Waiting 15 seconds for database to be ready..."
-sleep 15
-
-# Tentar conectar ao banco várias vezes
-echo "🔐 Testing database connection..."
-RETRY_COUNT=0
-MAX_RETRIES=30
-
-# Extrair componentes da DATABASE_URL para teste de conexão
-DB_HOST=$(echo $DATABASE_URL | sed -n 's/.*@\([^:]*\):.*/\1/p')
-DB_PORT=$(echo $DATABASE_URL | sed -n 's/.*:\([0-9]*\)\/.*/\1/p')
-DB_NAME=$(echo $DATABASE_URL | sed -n 's/.*\/\([^?]*\).*/\1/p')
-DB_USER=$(echo $DATABASE_URL | sed -n 's/.*:\/\/\([^:]*\):.*/\1/p')
-DB_PASS=$(echo $DATABASE_URL | sed -n 's/.*:\/\/[^:]*:\([^@]*\)@.*/\1/p')
-
-echo "🔍 Connection details:"
-echo "  - Host: $DB_HOST"
-echo "  - Port: $DB_PORT"
-echo "  - Database: $DB_NAME"
-echo "  - User: $DB_USER"
-
-# Função para testar conexão
-test_connection() {
-    PGPASSWORD="$DB_PASS" psql -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" -d "$DB_NAME" -c "SELECT 1;" > /dev/null 2>&1
 }
 
-# Loop de tentativas de conexão
-until test_connection; do
-  RETRY_COUNT=$((RETRY_COUNT + 1))
-  if [ $RETRY_COUNT -ge $MAX_RETRIES ]; then
-    echo "❌ Database connection failed after $MAX_RETRIES attempts"
-    echo "🔄 Trying to connect to default postgres database and create target database..."
+# Configurar DATABASE_URL baseado no ambiente
+configure_database_url() {
+    # Tentar diferentes combinações de credenciais
+    local db_hosts=("postgres" "localhost")
+    local db_users=("$FINANCAS_POSTGRES_USER" "postgres" "financas_user")
+    local db_passwords=("$FINANCAS_POSTGRES_PASSWORD" "postgres" "financas_senha_123")
+    local db_names=("$FINANCAS_POSTGRES_DB" "postgres" "financas_lar_db")
+    local db_port="5432"
     
-    # Tentar conectar ao banco padrão e criar o banco se necessário
-    if PGPASSWORD="$DB_PASS" psql -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" -d postgres -c "SELECT 1;" > /dev/null 2>&1; then
-      echo "✅ Connected to default database, creating target database if it doesn't exist..."
-      PGPASSWORD="$DB_PASS" psql -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" -d postgres -c "CREATE DATABASE \"$DB_NAME\";" 2>/dev/null || echo "Database may already exist"
-      
-      # Tentar novamente com o banco criado
-      if test_connection; then
-        echo "✅ Successfully connected to created database!"
-        break
-      fi
+    echo "🔍 Testing database connections..."
+    
+    # Se já temos DATABASE_URL configurada, testar primeiro
+    if [ -n "$DATABASE_URL" ]; then
+        echo "🔗 Testing existing DATABASE_URL..."
+        if test_database_connection "$DATABASE_URL"; then
+            echo "✅ Existing DATABASE_URL works!"
+            return 0
+        fi
     fi
     
-    echo "❌ Cannot connect to PostgreSQL. Starting application anyway..."
-    break
-  else
-    echo "Database connection failed - retrying in 5 seconds... (attempt $RETRY_COUNT/$MAX_RETRIES)"
-    sleep 5
-  fi
-done
+    # Tentar diferentes combinações
+    for host in "${db_hosts[@]}"; do
+        for user in "${db_users[@]}"; do
+            for password in "${db_passwords[@]}"; do
+                for dbname in "${db_names[@]}"; do
+                    if [ -n "$user" ] && [ -n "$password" ] && [ -n "$dbname" ]; then
+                        local test_url="postgresql://${user}:${password}@${host}:${db_port}/${dbname}?schema=public"
+                        echo "🔍 Testing: postgresql://${user}:***@${host}:${db_port}/${dbname}"
+                        
+                        if test_database_connection "$test_url"; then
+                            export DATABASE_URL="$test_url"
+                            echo "✅ Found working connection!"
+                            echo "👤 User: $user"
+                            echo "🗄️ Database: $dbname"
+                            echo "🏠 Host: $host"
+                            return 0
+                        fi
+                    fi
+                done
+            done
+        done
+    done
+    
+    echo "❌ No working database connection found"
+    return 1
+}
 
-if [ $RETRY_COUNT -lt $MAX_RETRIES ]; then
-  echo "✅ Database connection successful!"
-  
-  # Executar migrações
-  echo "🔄 Running database migrations..."
-  npx prisma migrate deploy || {
-    echo "⚠️ Migration failed, trying to push schema..."
-    npx prisma db push --accept-data-loss || {
-      echo "⚠️ Schema push also failed, but continuing..."
-    }
-  }
+# Função para testar conexão com o banco
+test_database_connection() {
+    local url="$1"
+    
+    # Extrair componentes da URL
+    local user=$(echo "$url" | sed -n 's/.*:\/\/\([^:]*\):.*/\1/p')
+    local password=$(echo "$url" | sed -n 's/.*:\/\/[^:]*:\([^@]*\)@.*/\1/p')
+    local host=$(echo "$url" | sed -n 's/.*@\([^:]*\):.*/\1/p')
+    local port=$(echo "$url" | sed -n 's/.*:\([0-9]*\)\/.*/\1/p')
+    local dbname=$(echo "$url" | sed -n 's/.*\/\([^?]*\).*/\1/p')
+    
+    # Testar conexão com timeout
+    if timeout 10 bash -c "PGPASSWORD='$password' psql -h '$host' -p '$port' -U '$user' -d '$dbname' -c 'SELECT 1;' >/dev/null 2>&1"; then
+        return 0
+    else
+        return 1
+    fi
+}
 
-  # Gerar cliente Prisma
-  echo "🔧 Generating Prisma client..."
-  npx prisma generate || {
-    echo "⚠️ Prisma generate failed, but continuing..."
-  }
+# Função para criar banco se necessário
+create_database_if_needed() {
+    local user=$(echo "$DATABASE_URL" | sed -n 's/.*:\/\/\([^:]*\):.*/\1/p')
+    local password=$(echo "$DATABASE_URL" | sed -n 's/.*:\/\/[^:]*:\([^@]*\)@.*/\1/p')
+    local host=$(echo "$DATABASE_URL" | sed -n 's/.*@\([^:]*\):.*/\1/p')
+    local port=$(echo "$DATABASE_URL" | sed -n 's/.*:\([0-9]*\)\/.*/\1/p')
+    local dbname=$(echo "$DATABASE_URL" | sed -n 's/.*\/\([^?]*\).*/\1/p')
+    
+    echo "🔧 Ensuring database '$dbname' exists..."
+    
+    # Tentar conectar ao banco específico
+    if PGPASSWORD="$password" psql -h "$host" -p "$port" -U "$user" -d "$dbname" -c "SELECT 1;" >/dev/null 2>&1; then
+        echo "✅ Database '$dbname' exists and is accessible"
+        return 0
+    fi
+    
+    # Se não conseguir, tentar conectar ao postgres padrão e criar o banco
+    echo "🔧 Database '$dbname' not found, trying to create..."
+    if PGPASSWORD="$password" psql -h "$host" -p "$port" -U "$user" -d "postgres" -c "CREATE DATABASE \"$dbname\";" 2>/dev/null; then
+        echo "✅ Database '$dbname' created successfully"
+        return 0
+    else
+        echo "⚠️ Could not create database '$dbname', but continuing..."
+        return 1
+    fi
+}
 
-  # Seed do banco
-  echo "🌱 Seeding database..."
-  node src/seed.js || {
-    echo "⚠️ Seeding failed or already completed"
-  }
+# Detectar ambiente
+detect_environment
+
+# Configurar conexão com banco
+echo "🔗 Configuring database connection..."
+if configure_database_url; then
+    echo "✅ Database connection configured"
+    echo "🔗 DATABASE_URL: $(echo $DATABASE_URL | sed 's/:\/\/[^:]*:[^@]*@/:\/\/***:***@/')"
+    
+    # Aguardar um pouco para estabilizar
+    echo "⏳ Waiting 10 seconds for database to stabilize..."
+    sleep 10
+    
+    # Criar banco se necessário
+    create_database_if_needed
+    
+    # Executar migrações
+    echo "🔄 Running database migrations..."
+    if npx prisma migrate deploy 2>/dev/null; then
+        echo "✅ Migrations completed successfully"
+    else
+        echo "⚠️ Migrations failed, trying to push schema..."
+        if npx prisma db push --accept-data-loss 2>/dev/null; then
+            echo "✅ Schema pushed successfully"
+        else
+            echo "⚠️ Schema push failed, but continuing..."
+        fi
+    fi
+    
+    # Gerar cliente Prisma
+    echo "🔧 Generating Prisma client..."
+    npx prisma generate || echo "⚠️ Prisma generate failed, but continuing..."
+    
+    # Seed do banco
+    echo "🌱 Seeding database..."
+    node src/seed.js || echo "⚠️ Seeding failed or already completed"
+    
 else
-  echo "⚠️ Starting without database connection"
+    echo "❌ Could not configure database connection"
+    echo "🔄 Starting application without database (will retry connections)"
 fi
 
 # Iniciar aplicação
