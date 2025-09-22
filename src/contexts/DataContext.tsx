@@ -71,7 +71,9 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   // Configure axios base URL
   useEffect(() => {
-    axios.defaults.baseURL = window.location.origin;
+    if (typeof window !== 'undefined') {
+      axios.defaults.baseURL = window.location.origin;
+    }
   }, []);
 
   // Load data when user changes

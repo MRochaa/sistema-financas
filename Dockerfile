@@ -5,11 +5,14 @@ FROM node:20-alpine AS frontend-builder
 
 WORKDIR /app
 
+# Instala dependências do sistema necessárias
+RUN apk add --no-cache python3 make g++
+
 # Copia arquivos de dependências do frontend
 COPY package*.json ./
 
 # Instala TODAS as dependências (incluindo dev) para o build
-RUN npm install
+RUN npm ci --only=production=false
 
 # Copia código fonte do frontend
 COPY . .
@@ -28,14 +31,17 @@ WORKDIR /app
 RUN apk add --no-cache \
     openssl \
     openssl-dev \
-    ca-certificates
+    ca-certificates \
+    python3 \
+    make \
+    g++
 
 # Copia arquivos de dependências do backend
 COPY backend/package*.json ./
 COPY backend/prisma ./prisma/
 
 # Instala dependências do backend
-RUN npm install
+RUN npm ci --only=production
 
 # Copia código fonte do backend
 COPY backend/ ./
