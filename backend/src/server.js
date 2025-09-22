@@ -3,10 +3,21 @@ const cors = require('cors');
 const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
 const path = require('path');
-const { PrismaClient } = require('@prisma/client');
+
+// Initialize Prisma with error handling
+let prisma;
+try {
+  const { PrismaClient } = require('@prisma/client');
+  prisma = new PrismaClient({
+    log: ['error', 'warn'],
+    errorFormat: 'minimal'
+  });
+} catch (error) {
+  console.error('Failed to initialize Prisma:', error.message);
+  process.exit(1);
+}
 
 const app = express();
-const prisma = new PrismaClient();
 
 // Security middleware
 app.use(helmet({
