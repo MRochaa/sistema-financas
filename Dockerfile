@@ -58,32 +58,30 @@ COPY --from=frontend-builder /app/dist ./public
 COPY --from=backend-builder /app ./
 
 # Cria script de inicialização
-RUN cat > /app/start.sh << 'EOF'
-#!/bin/sh
-echo "🚀 Starting Finanças do Lar System..."
-echo "📊 Environment: $NODE_ENV"
-echo "🔗 Port: $PORT"
-
-# Wait for database to be ready
-echo "⏳ Waiting for database..."
-until pg_isready -h postgres -p 5432 -U "$POSTGRES_USER" -d "$POSTGRES_DB"; do
-  echo "Database is unavailable - sleeping"
-  sleep 2
-done
-echo "✅ Database is ready!"
-
-# Run database migrations
-echo "🔄 Running database migrations..."
-npx prisma migrate deploy
-
-# Seed database with initial data
-echo "🌱 Seeding database..."
-node src/seed.js
-
-# Start the application
-echo "🎯 Starting application..."
-exec node src/server.js
-EOF
+RUN echo '#!/bin/sh' > /app/start.sh && \
+    echo 'echo "🚀 Starting Finanças do Lar System..."' >> /app/start.sh && \
+    echo 'echo "📊 Environment: $NODE_ENV"' >> /app/start.sh && \
+    echo 'echo "🔗 Port: $PORT"' >> /app/start.sh && \
+    echo '' >> /app/start.sh && \
+    echo '# Wait for database to be ready' >> /app/start.sh && \
+    echo 'echo "⏳ Waiting for database..."' >> /app/start.sh && \
+    echo 'until pg_isready -h postgres -p 5432 -U "$POSTGRES_USER" -d "$POSTGRES_DB"; do' >> /app/start.sh && \
+    echo '  echo "Database is unavailable - sleeping"' >> /app/start.sh && \
+    echo '  sleep 2' >> /app/start.sh && \
+    echo 'done' >> /app/start.sh && \
+    echo 'echo "✅ Database is ready!"' >> /app/start.sh && \
+    echo '' >> /app/start.sh && \
+    echo '# Run database migrations' >> /app/start.sh && \
+    echo 'echo "🔄 Running database migrations..."' >> /app/start.sh && \
+    echo 'npx prisma migrate deploy' >> /app/start.sh && \
+    echo '' >> /app/start.sh && \
+    echo '# Seed database with initial data' >> /app/start.sh && \
+    echo 'echo "🌱 Seeding database..."' >> /app/start.sh && \
+    echo 'node src/seed.js' >> /app/start.sh && \
+    echo '' >> /app/start.sh && \
+    echo '# Start the application' >> /app/start.sh && \
+    echo 'echo "🎯 Starting application..."' >> /app/start.sh && \
+    echo 'exec node src/server.js' >> /app/start.sh
 
 # Define permissões e proprietário
 RUN chmod +x /app/start.sh && \
