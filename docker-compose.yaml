@@ -7,21 +7,15 @@ services:
       dockerfile: Dockerfile
     container_name: financas-sistema
     environment:
-      # Database
-      DATABASE_URL: postgresql://financas_user:sua_senha_super_segura_aqui@localhost:5432/financas_lar?schema=public
-      POSTGRES_USER: ${POSTGRES_USER:-financas_user}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-sua_senha_super_segura_aqui}
-      POSTGRES_DB: ${POSTGRES_DB:-financas_lar}
-      
-      # JWT & Security
-      JWT_SECRET: ${JWT_SECRET:-sua_chave_jwt_super_segura_de_pelo_menos_32_caracteres}
-      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-7d}
-      BCRYPT_ROUNDS: ${BCRYPT_ROUNDS:-12}
-      
       # Application
       NODE_ENV: production
       PORT: 3000
       FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3000}
+      
+      # JWT & Security (para futuro uso)
+      JWT_SECRET: ${JWT_SECRET:-sua_chave_jwt_super_segura_de_pelo_menos_32_caracteres}
+      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-7d}
+      BCRYPT_ROUNDS: ${BCRYPT_ROUNDS:-12}
       
       # Rate Limiting
       RATE_LIMIT_WINDOW_MS: ${RATE_LIMIT_WINDOW_MS:-900000}
@@ -35,9 +29,8 @@ services:
       test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
       interval: 30s
       timeout: 10s
-      start_period: 60s
+      start_period: 30s
       retries: 3
-
 
 networks:
   coolify:
