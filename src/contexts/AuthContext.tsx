@@ -43,6 +43,7 @@ export const useAuth = () => {
 
 // Configure axios defaults
 axios.defaults.timeout = 10000; // 10 second timeout
+axios.defaults.baseURL = window.location.origin;
 
 // Add request interceptor for security headers
 axios.interceptors.request.use((config) => {
