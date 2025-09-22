@@ -26,16 +26,6 @@ function initializePrisma() {
     return null;
   }
 }
-          url: process.env.DATABASE_URL
-        }
-      }
-    });
-    return prisma;
-  } catch (error) {
-    console.error('Failed to initialize Prisma:', error);
-    return null;
-  }
-}
 
 const app = express();
 
@@ -96,19 +86,6 @@ app.get('/health', async (req, res) => {
   try {
     // Initialize Prisma if not already done
     if (!prisma) {
-      prisma = initializePrisma();
-    }
-    
-    let dbStatus = 'disconnected';
-    if (prisma) {
-      try {
-        await prisma.$executeRaw`SELECT 1`;
-        dbStatus = 'connected';
-      } catch (dbError) {
-        console.error('Database health check failed:', dbError.message);
-        dbStatus = 'error';
-      }
-    }
       prisma = initializePrisma();
     }
     
