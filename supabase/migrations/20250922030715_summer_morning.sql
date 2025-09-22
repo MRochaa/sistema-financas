@@ -1,3 +1,52 @@
+/*
+  # Sistema de Finanças do Lar - Schema Inicial
+
+  1. Tabelas Criadas
+    - `users` - Usuários do sistema
+      - `id` (texto, chave primária)
+      - `email` (texto, único)
+      - `name` (texto)
+      - `password` (texto, hash bcrypt)
+      - `createdAt` (timestamp)
+      - `updatedAt` (timestamp)
+    
+    - `categories` - Categorias de transações
+      - `id` (texto, chave primária)
+      - `name` (texto)
+      - `type` (enum: INCOME/EXPENSE)
+      - `color` (texto, hex color)
+      - `userId` (texto, FK para users)
+      - `createdAt` (timestamp)
+      - `updatedAt` (timestamp)
+    
+    - `transactions` - Transações financeiras
+      - `id` (texto, chave primária)
+      - `type` (enum: INCOME/EXPENSE)
+      - `amount` (decimal)
+      - `description` (texto, opcional)
+      - `date` (timestamp)
+      - `categoryId` (texto, FK para categories)
+      - `userId` (texto, FK para users)
+      - `createdAt` (timestamp)
+      - `updatedAt` (timestamp)
+
+  2. Relacionamentos
+    - User -> Categories (1:N)
+    - User -> Transactions (1:N)
+    - Category -> Transactions (1:N)
+
+  3. Índices
+    - users.email (único)
+    - categories.userId
+    - transactions.userId
+    - transactions.categoryId
+    - transactions.date
+
+  4. Constraints
+    - Cascade delete para manter integridade
+    - Validação de tipos enum
+*/
+
 -- CreateEnum
 CREATE TYPE "CategoryType" AS ENUM ('INCOME', 'EXPENSE');
 
@@ -11,7 +60,7 @@ CREATE TABLE "users" (
     "name" TEXT NOT NULL,
     "password" TEXT NOT NULL,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt" TIMESTAMP(3) NOT NULL,
+    "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
     CONSTRAINT "users_pkey" PRIMARY KEY ("id")
 );
@@ -24,7 +73,7 @@ CREATE TABLE "categories" (
     "color" TEXT NOT NULL,
     "userId" TEXT NOT NULL,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt" TIMESTAMP(3) NOT NULL,
+    "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
     CONSTRAINT "categories_pkey" PRIMARY KEY ("id")
 );
@@ -39,7 +88,7 @@ CREATE TABLE "transactions" (
     "categoryId" TEXT NOT NULL,
     "userId" TEXT NOT NULL,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt" TIMESTAMP(3) NOT NULL,
+    "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
     CONSTRAINT "transactions_pkey" PRIMARY KEY ("id")
 );

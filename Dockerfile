@@ -24,8 +24,11 @@ FROM node:20-alpine AS backend-builder
 
 WORKDIR /app
 
-# Instala dependências necessárias para o Prisma
-RUN apk add --no-cache openssl1.1-compat
+# Instala dependências necessárias para o Prisma no Alpine
+RUN apk add --no-cache \
+    openssl \
+    openssl-dev \
+    ca-certificates
 
 # Copia arquivos de dependências do backend
 COPY backend/package*.json ./
@@ -49,7 +52,8 @@ FROM node:20-alpine
 RUN apk add --no-cache \
     curl \
     postgresql-client \
-    openssl1.1-compat \
+    openssl \
+    ca-certificates \
     libc6-compat
 
 # Cria usuário não-root para segurança
@@ -66,15 +70,15 @@ COPY --from=frontend-builder --chown=nextjs:nodejs /app/dist ./public
 COPY --from=backend-builder --chown=nextjs:nodejs /app ./
 
 # Cria script de inicialização
-COPY --chown=nextjs:nodejs <<EOF /app/start.sh
+RUN cat > /app/start.sh << 'EOF'
 #!/bin/sh
 echo "🚀 Starting Finanças do Lar System..."
-echo "📊 Environment: \$NODE_ENV"
-echo "🔗 Port: \$PORT"
+echo "📊 Environment: $NODE_ENV"
+echo "🔗 Port: $PORT"
 
 # Wait for database to be ready
 echo "⏳ Waiting for database..."
-until pg_isready -h postgres -p 5432 -U "\$POSTGRES_USER" -d "\$POSTGRES_DB"; do
+until pg_isready -h postgres -p 5432 -U "$POSTGRES_USER" -d "$POSTGRES_DB"; do
   echo "Database is unavailable - sleeping"
   sleep 2
 done
@@ -93,8 +97,9 @@ echo "🎯 Starting application..."
 exec node src/server.js
 EOF
 
-# Define permissões
-RUN chmod +x /app/start.sh
+# Define permissões e proprietário
+RUN chmod +x /app/start.sh && \
+    chown -R nextjs:nodejs /app
 
 # Muda para usuário não-root
 USER nextjs

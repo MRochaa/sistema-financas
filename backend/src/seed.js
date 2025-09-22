@@ -1,15 +1,14 @@
-// Initialize Prisma with error handling
-let prisma;
-try {
-  const { PrismaClient } = require('@prisma/client');
-  prisma = new PrismaClient({
-    log: ['error', 'warn'],
-    errorFormat: 'minimal'
-  });
-} catch (error) {
-  console.error('Failed to initialize Prisma for seeding:', error.message);
-  process.exit(1);
-}
+const { PrismaClient } = require('@prisma/client');
+
+const prisma = new PrismaClient({
+  log: ['error', 'warn'],
+  errorFormat: 'minimal',
+  datasources: {
+    db: {
+      url: process.env.DATABASE_URL
+    }
+  }
+});
 
 
 async function main() {
