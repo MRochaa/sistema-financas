@@ -11,8 +11,8 @@ RUN apk add --no-cache python3 make g++
 # Copia arquivos de dependências do frontend
 COPY package*.json ./
 
-# Instala TODAS as dependências (incluindo dev) para o build
-RUN npm ci --only=production=false
+# Instala dependências do frontend (incluindo dev para build)
+RUN npm install
 
 # Copia código fonte do frontend
 COPY . .
@@ -41,7 +41,7 @@ COPY backend/package*.json ./
 COPY backend/prisma ./prisma/
 
 # Instala dependências do backend
-RUN npm ci --only=production
+RUN npm install --omit=dev
 
 # Copia código fonte do backend
 COPY backend/ ./

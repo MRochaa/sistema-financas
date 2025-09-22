@@ -42,6 +42,7 @@ app.use(cors({
   origin: [
     process.env.FRONTEND_URL || 'http://localhost:3000',
     'https://esgcwcsso0go4ck4ogs8ko8o.82.25.65.212.sslip.io',
+    'https://es4ckok8g0k0sgo0w0o044kk.82.25.65.212.sslip.io',
     /\.sslip\.io$/
   ],
   credentials: true,
