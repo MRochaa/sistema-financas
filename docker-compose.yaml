@@ -1,27 +1,57 @@
 version: '3.8'
 
 services:
+  # Banco de dados PostgreSQL
+  postgres:
+    image: postgres:15-alpine
+    container_name: financas-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-sistema_financas}
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-suasenha}
+      POSTGRES_INITDB_ARGS: "--encoding=UTF-8 --lc-collate=C --lc-ctype=C"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-sistema_financas}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - coolify
+
+  # Aplicação completa
   app:
-    build:
+    build: 
       context: .
       dockerfile: Dockerfile
-    container_name: financas-sistema
+    container_name: financas-app
     environment:
+      # Database
+      DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-suasenha}@postgres:5432/${POSTGRES_DB:-sistema_financas}?schema=public
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-suasenha}
+      POSTGRES_DB: ${POSTGRES_DB:-sistema_financas}
+      
+      # JWT & Security
+      JWT_SECRET: ${JWT_SECRET:-sua_chave_jwt_super_segura_de_pelo_menos_32_caracteres}
+      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-7d}
+      BCRYPT_ROUNDS: ${BCRYPT_ROUNDS:-12}
+      
       # Application
       NODE_ENV: production
       PORT: 3000
       FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3000}
-      
-      # JWT & Security (para futuro uso)
-      JWT_SECRET: ${JWT_SECRET:-sua_chave_jwt_super_segura_de_pelo_menos_32_caracteres}
-      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-7d}
-      BCRYPT_ROUNDS: ${BCRYPT_ROUNDS:-12}
       
       # Rate Limiting
       RATE_LIMIT_WINDOW_MS: ${RATE_LIMIT_WINDOW_MS:-900000}
       RATE_LIMIT_MAX_REQUESTS: ${RATE_LIMIT_MAX_REQUESTS:-100}
     ports:
       - "3000:3000"
+    depends_on:
+      postgres:
+        condition: service_healthy
     restart: unless-stopped
     networks:
       - coolify
@@ -29,8 +59,12 @@ services:
       test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
       interval: 30s
       timeout: 10s
-      start_period: 30s
+      start_period: 90s
       retries: 3
+
+volumes:
+  postgres_data:
+    driver: local
 
 networks:
   coolify:

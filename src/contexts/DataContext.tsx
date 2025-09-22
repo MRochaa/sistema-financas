@@ -83,7 +83,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const loadCategories = async () => {
     try {
       setLoading(true);
-      const response = await axios.get('/api/categories');
+      const response = await axios.get('/categories');
       setCategories(response.data);
     } catch (error) {
       console.error('Error loading categories:', error);
@@ -96,7 +96,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const loadTransactions = async () => {
     try {
       setLoading(true);
-      const response = await axios.get('/api/transactions');
+      const response = await axios.get('/transactions');
       setTransactions(response.data.transactions || []);
     } catch (error) {
       console.error('Error loading transactions:', error);
@@ -123,7 +123,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       const sanitizedName = sanitizeInput(categoryData.name);
       
-        const response = await axios.post('/api/categories', {
+        const response = await axios.post('/categories', {
           name: sanitizedName,
           type: categoryData.type,
           color: categoryData.color || '#6B7280'
@@ -153,7 +153,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       
       const sanitizedName = sanitizeInput(categoryData.name);
       
-        const response = await axios.put(`/api/categories/${id}`, {
+        const response = await axios.put(`/categories/${id}`, {
           name: sanitizedName,
           type: categoryData.type,
           color: categoryData.color
@@ -181,7 +181,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const deleteCategory = (id: string) => {
     return new Promise(async (resolve, reject) => {
       try {
-        await axios.delete(`/api/categories/${id}`);
+        await axios.delete(`/categories/${id}`);
         setCategories(prev => prev.filter(cat => cat.id !== id));
         toast.success('Categoria excluída com sucesso');
         resolve(true);
@@ -217,7 +217,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const sanitizedDescription = transactionData.description ? 
         sanitizeInput(transactionData.description).substring(0, 500) : undefined;
 
-        const response = await axios.post('/api/transactions', {
+        const response = await axios.post('/transactions', {
           type: transactionData.type,
           amount: transactionData.amount,
         description: sanitizedDescription,
@@ -255,7 +255,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const sanitizedDescription = transactionData.description ? 
         sanitizeInput(transactionData.description).substring(0, 500) : undefined;
 
-        const response = await axios.put(`/api/transactions/${id}`, {
+        const response = await axios.put(`/transactions/${id}`, {
           type: transactionData.type,
           amount: transactionData.amount,
               description: sanitizedDescription,
@@ -282,7 +282,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const deleteTransaction = (id: string) => {
     return new Promise(async (resolve, reject) => {
       try {
-        await axios.delete(`/api/transactions/${id}`);
+        await axios.delete(`/transactions/${id}`);
         setTransactions(prev => prev.filter(t => t.id !== id));
         toast.success('Transação excluída com sucesso');
         resolve(true);

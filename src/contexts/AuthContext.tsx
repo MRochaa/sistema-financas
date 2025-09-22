@@ -42,7 +42,7 @@ export const useAuth = () => {
 };
 
 // API configuration - use relative URLs in production
-const API_URL = import.meta.env.VITE_API_URL || '/api';
+const API_URL = '/api';
 
 // Configure axios defaults
 axios.defaults.baseURL = API_URL;
