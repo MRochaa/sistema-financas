@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import toast from 'react-hot-toast';
-import { supabase } from '../lib/supabase';
+import axios from 'axios';
 
 // Security: Input validation schemas
 const validateEmail = (email: string): boolean => {
@@ -67,6 +67,12 @@ axios.interceptors.response.use(
   }
 );
 
+// Set authorization header if token exists
+const token = localStorage.getItem('token');
+if (token) {
+  axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+}
+
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
   const [token, setToken] = useState<string | null>(null);
@@ -76,22 +82,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     // Check if user is already logged in
     const checkUser = async () => {
       try {
-        const { data: { session } } = await supabase.auth.getSession();
-        if (session?.user) {
-          const { data: userData } = await supabase
-            .from('users')
-            .select('*')
-            .eq('id', session.user.id)
-            .single();
-          
-          if (userData) {
-            setUser({
-              id: userData.id,
-              email: userData.email,
-              name: userData.name
-            });
-            setToken(session.access_token);
-          }
+        const savedToken = localStorage.getItem('token');
+        const savedUser = localStorage.getItem('user');
+        
+        if (savedToken && savedUser) {
+          setToken(savedToken);
+          setUser(JSON.parse(savedUser));
+          axios.defaults.headers.common['Authorization'] = `Bearer ${savedToken}`;
         }
       } catch (error) {
         console.error('Error checking user session:', error);
@@ -101,33 +98,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
 
     checkUser();
-
-    // Listen for auth changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      if (event === 'SIGNED_IN' && session?.user) {
-        const { data: userData } = await supabase
-          .from('users')
-          .select('*')
-          .eq('id', session.user.id)
-          .single();
-        
-        if (userData) {
-          setUser({
-            id: userData.id,
-            email: userData.email,
-            name: userData.name
-          });
-          setToken(session.access_token);
-        }
-      } else if (event === 'SIGNED_OUT') {
-        setUser(null);
-        setToken(null);
-      }
-    });
-
-    return () => {
-      subscription.unsubscribe();
-    };
   }, []);
 
   const login = async (email: string, password: string) => {
@@ -142,34 +112,28 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       const sanitizedEmail = sanitizeInput(email);
       
-      const { data, error } = await supabase.auth.signInWithPassword({
+      const response = await axios.post('/api/auth/login', {
         email: sanitizedEmail,
         password
       });
 
-      if (error) {
-        throw new Error(error.message);
-      }
+      const { user: userData, token: userToken } = response.data;
 
-      if (data.user) {
-        const { data: userData } = await supabase
-          .from('users')
-          .select('*')
-          .eq('id', data.user.id)
-          .single();
-        
-        if (userData) {
-          setUser({
-            id: userData.id,
-            email: userData.email,
-            name: userData.name
-          });
-          setToken(data.session?.access_token || null);
-          toast.success(`Bem-vindo, ${userData.name}!`);
-        }
-      }
+      // Store in localStorage
+      localStorage.setItem('token', userToken);
+      localStorage.setItem('user', JSON.stringify(userData));
+      
+      // Set axios default header
+      axios.defaults.headers.common['Authorization'] = `Bearer ${userToken}`;
+      
+      // Update state
+      setUser(userData);
+      setToken(userToken);
+      
+      toast.success(`Bem-vindo, ${userData.name}!`);
+      
     } catch (error: any) {
-      const message = error.message || 'Erro ao fazer login';
+      const message = error.response?.data?.error || error.message || 'Erro ao fazer login';
       toast.error(message);
       throw error;
     }
@@ -191,67 +155,29 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const sanitizedEmail = sanitizeInput(email);
       const sanitizedName = sanitizeInput(name);
       
-      // First, create the auth user
-      const { data: authData, error: authError } = await supabase.auth.signUp({
+      const response = await axios.post('/api/auth/register', {
         email: sanitizedEmail,
-        password
+        password,
+        name: sanitizedName
       });
 
-      if (authError) {
-        throw new Error(authError.message);
-      }
+      const { user: userData, token: userToken } = response.data;
 
-      if (authData.user) {
-        // Create user profile
-        const { data: userData, error: profileError } = await supabase
-          .from('users')
-          .insert({
-            id: authData.user.id,
-            email: sanitizedEmail,
-            name: sanitizedName
-          })
-          .select()
-          .single();
-
-        if (profileError) {
-          throw new Error(profileError.message);
-        }
-
-        // Create default categories for the user
-        const defaultCategories = [
-          // Income categories
-          { name: 'Salário', type: 'INCOME' as const, color: '#10B981', user_id: authData.user.id },
-          { name: 'Freelance', type: 'INCOME' as const, color: '#059669', user_id: authData.user.id },
-          { name: 'Investimentos', type: 'INCOME' as const, color: '#047857', user_id: authData.user.id },
-          { name: 'Outros Rendimentos', type: 'INCOME' as const, color: '#065f46', user_id: authData.user.id },
-          
-          // Expense categories
-          { name: 'Alimentação', type: 'EXPENSE' as const, color: '#EF4444', user_id: authData.user.id },
-          { name: 'Transporte', type: 'EXPENSE' as const, color: '#DC2626', user_id: authData.user.id },
-          { name: 'Moradia', type: 'EXPENSE' as const, color: '#B91C1C', user_id: authData.user.id },
-          { name: 'Saúde', type: 'EXPENSE' as const, color: '#991B1B', user_id: authData.user.id },
-          { name: 'Educação', type: 'EXPENSE' as const, color: '#7F1D1D', user_id: authData.user.id },
-          { name: 'Lazer', type: 'EXPENSE' as const, color: '#F59E0B', user_id: authData.user.id },
-          { name: 'Roupas', type: 'EXPENSE' as const, color: '#D97706', user_id: authData.user.id },
-          { name: 'Tecnologia', type: 'EXPENSE' as const, color: '#B45309', user_id: authData.user.id },
-          { name: 'Contas', type: 'EXPENSE' as const, color: '#92400E', user_id: authData.user.id },
-          { name: 'Outros Gastos', type: 'EXPENSE' as const, color: '#78350F', user_id: authData.user.id }
-        ];
-
-        await supabase.from('categories').insert(defaultCategories);
-
-        if (userData) {
-          setUser({
-            id: userData.id,
-            email: userData.email,
-            name: userData.name
-          });
-          setToken(authData.session?.access_token || null);
-          toast.success(`Conta criada com sucesso! Bem-vindo, ${userData.name}!`);
-        }
-      }
+      // Store in localStorage
+      localStorage.setItem('token', userToken);
+      localStorage.setItem('user', JSON.stringify(userData));
+      
+      // Set axios default header
+      axios.defaults.headers.common['Authorization'] = `Bearer ${userToken}`;
+      
+      // Update state
+      setUser(userData);
+      setToken(userToken);
+      
+      toast.success(`Conta criada com sucesso! Bem-vindo, ${userData.name}!`);
+      
     } catch (error: any) {
-      const message = error.message || 'Erro ao criar conta';
+      const message = error.response?.data?.error || error.message || 'Erro ao criar conta';
       toast.error(message);
       throw error;
     }
@@ -259,13 +185,24 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const logout = async () => {
     try {
-      await supabase.auth.signOut();
+      // Clear localStorage
+      localStorage.removeItem('token');
+      localStorage.removeItem('user');
+      
+      // Clear axios default header
+      delete axios.defaults.headers.common['Authorization'];
+      
+      // Update state
       setUser(null);
       setToken(null);
+      
       toast.success('Logout realizado com sucesso');
     } catch (error) {
       console.error('Error during logout:', error);
       // Force logout even if there's an error
+      localStorage.removeItem('token');
+      localStorage.removeItem('user');
+      delete axios.defaults.headers.common['Authorization'];
       setUser(null);
       setToken(null);
       toast.success('Logout realizado com sucesso');

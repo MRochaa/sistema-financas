@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { useAuth } from './AuthContext';
 import toast from 'react-hot-toast';
+import axios from 'axios';
 
 // Security: Input validation and sanitization
 const sanitizeInput = (input: string): string => {
@@ -62,238 +63,236 @@ export const useData = () => {
   return context;
 };
 
-// Initial categories - basic set for new users
-const initialCategories: Category[] = [
-  // Income categories
-  { id: '1', name: 'Salário', type: 'INCOME', color: '#10B981' },
-  { id: '2', name: 'Freelance', type: 'INCOME', color: '#059669' },
-  { id: '3', name: 'Investimentos', type: 'INCOME', color: '#047857' },
-  { id: '4', name: 'Outros Rendimentos', type: 'INCOME', color: '#065f46' },
-  
-  // Expense categories
-  { id: '5', name: 'Alimentação', type: 'EXPENSE', color: '#EF4444' },
-  { id: '6', name: 'Transporte', type: 'EXPENSE', color: '#DC2626' },
-  { id: '7', name: 'Moradia', type: 'EXPENSE', color: '#B91C1C' },
-  { id: '8', name: 'Saúde', type: 'EXPENSE', color: '#991B1B' },
-  { id: '9', name: 'Educação', type: 'EXPENSE', color: '#7F1D1D' },
-  { id: '10', name: 'Lazer', type: 'EXPENSE', color: '#F59E0B' },
-  { id: '11', name: 'Roupas', type: 'EXPENSE', color: '#D97706' },
-  { id: '12', name: 'Tecnologia', type: 'EXPENSE', color: '#B45309' },
-  { id: '13', name: 'Contas', type: 'EXPENSE', color: '#92400E' },
-  { id: '14', name: 'Outros Gastos', type: 'EXPENSE', color: '#78350F' }
-];
-
-// No initial transactions - start clean
-const initialTransactions: Transaction[] = [];
-
 export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [categories, setCategories] = useState<Category[]>(() => {
-    const saved = localStorage.getItem('categories');
-    return saved ? JSON.parse(saved) : initialCategories;
-  });
-  const [transactions, setTransactions] = useState<Transaction[]>(() => {
-    const saved = localStorage.getItem('transactions');
-    return saved ? JSON.parse(saved) : initialTransactions;
-  });
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [loading, setLoading] = useState(false);
   const { user } = useAuth();
 
-  // Save to localStorage whenever data changes
-  useEffect(() => {
-    localStorage.setItem('categories', JSON.stringify(categories));
-  }, [categories]);
-
-  useEffect(() => {
-    localStorage.setItem('transactions', JSON.stringify(transactions));
-  }, [transactions]);
-
-  // Update user info in transactions when user changes
+  // Load data when user changes
   useEffect(() => {
     if (user) {
-      setTransactions(prev => prev.map(transaction => ({
-        ...transaction,
-        user: { name: user.name, email: user.email }
-      })));
+      loadCategories();
+      loadTransactions();
+    } else {
+      setCategories([]);
+      setTransactions([]);
     }
   }, [user]);
 
+  const loadCategories = async () => {
+    try {
+      setLoading(true);
+      const response = await axios.get('/api/categories');
+      setCategories(response.data);
+    } catch (error) {
+      console.error('Error loading categories:', error);
+      toast.error('Erro ao carregar categorias');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const loadTransactions = async () => {
+    try {
+      setLoading(true);
+      const response = await axios.get('/api/transactions');
+      setTransactions(response.data.transactions || []);
+    } catch (error) {
+      console.error('Error loading transactions:', error);
+      toast.error('Erro ao carregar transações');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   // Category methods
   const addCategory = (categoryData: Omit<Category, 'id'>) => {
-    try {
+    return new Promise(async (resolve, reject) => {
+      try {
       // Input validation
       if (!categoryData.name || categoryData.name.length < 1 || categoryData.name.length > 100) {
         toast.error('Nome da categoria deve ter entre 1 e 100 caracteres');
-        return null;
+        return reject(new Error('Invalid name'));
       }
       
       if (!['INCOME', 'EXPENSE'].includes(categoryData.type)) {
         toast.error('Tipo de categoria inválido');
-        return null;
+        return reject(new Error('Invalid type'));
       }
 
       const sanitizedName = sanitizeInput(categoryData.name);
       
-    // Check if category already exists
-      const existingCategory = categories.find(cat => 
-        cat.name.toLowerCase() === sanitizedName.toLowerCase()
-      );
-    if (existingCategory) {
-      toast.error('Categoria já existe');
-      return existingCategory;
-    }
+        const response = await axios.post('/api/categories', {
+          name: sanitizedName,
+          type: categoryData.type,
+          color: categoryData.color || '#6B7280'
+        });
 
-    const newCategory: Category = {
-      id: Date.now().toString(),
-        name: sanitizedName,
-        type: categoryData.type,
-        color: categoryData.color || '#6B7280'
-    };
-    setCategories(prev => [...prev, newCategory]);
-    toast.success('Categoria criada com sucesso');
-    return newCategory;
-    } catch (error) {
-      console.error('Error adding category:', error);
-      toast.error('Erro ao criar categoria');
-      return null;
-    }
+        const newCategory = response.data;
+        setCategories(prev => [...prev, newCategory]);
+        toast.success('Categoria criada com sucesso');
+        resolve(newCategory);
+      } catch (error: any) {
+        console.error('Error adding category:', error);
+        const message = error.response?.data?.error || 'Erro ao criar categoria';
+        toast.error(message);
+        reject(error);
+      }
+    });
   };
 
   const updateCategory = (id: string, categoryData: Omit<Category, 'id'>) => {
-    try {
+    return new Promise(async (resolve, reject) => {
+      try {
       // Input validation
       if (!categoryData.name || categoryData.name.length < 1 || categoryData.name.length > 100) {
         toast.error('Nome da categoria deve ter entre 1 e 100 caracteres');
-        return;
+        return reject(new Error('Invalid name'));
       }
       
       const sanitizedName = sanitizeInput(categoryData.name);
       
-    setCategories(prev => prev.map(cat => 
-        cat.id === id ? { 
-          ...cat, 
+        const response = await axios.put(`/api/categories/${id}`, {
           name: sanitizedName,
           type: categoryData.type,
-          color: categoryData.color || cat.color
-        } : cat
-    ));
-    
-    // Update transactions that use this category
-    setTransactions(prev => prev.map(transaction => 
-      transaction.category.id === id 
-          ? { ...transaction, category: { id, name: sanitizedName, type: categoryData.type, color: categoryData.color || transaction.category.color } }
-        : transaction
-    ));
-    
-    toast.success('Categoria atualizada com sucesso');
-    } catch (error) {
-      console.error('Error updating category:', error);
-      toast.error('Erro ao atualizar categoria');
-    }
+          color: categoryData.color
+        });
+
+        const updatedCategory = response.data;
+        setCategories(prev => prev.map(cat => 
+          cat.id === id ? updatedCategory : cat
+        ));
+        
+        // Reload transactions to get updated category info
+        await loadTransactions();
+        
+        toast.success('Categoria atualizada com sucesso');
+        resolve(updatedCategory);
+      } catch (error: any) {
+        console.error('Error updating category:', error);
+        const message = error.response?.data?.error || 'Erro ao atualizar categoria';
+        toast.error(message);
+        reject(error);
+      }
+    });
   };
 
   const deleteCategory = (id: string) => {
-    const hasTransactions = transactions.some(t => t.category.id === id);
-    
-    if (hasTransactions) {
-      toast.error('Não é possível excluir uma categoria que possui transações associadas');
-      return;
-    }
-    
-    setCategories(prev => prev.filter(cat => cat.id !== id));
-    toast.success('Categoria excluída com sucesso');
+    return new Promise(async (resolve, reject) => {
+      try {
+        await axios.delete(`/api/categories/${id}`);
+        setCategories(prev => prev.filter(cat => cat.id !== id));
+        toast.success('Categoria excluída com sucesso');
+        resolve(true);
+      } catch (error: any) {
+        console.error('Error deleting category:', error);
+        const message = error.response?.data?.error || 'Erro ao excluir categoria';
+        toast.error(message);
+        reject(error);
+      }
+    });
   };
 
   // Transaction methods
   const addTransaction = (transactionData: Omit<Transaction, 'id' | 'category' | 'user'> & { categoryId: string }) => {
-    try {
+    return new Promise(async (resolve, reject) => {
+      try {
       // Input validation
       if (!validateAmount(transactionData.amount)) {
         toast.error('Valor deve ser um número positivo válido');
-        return;
+        return reject(new Error('Invalid amount'));
       }
       
       if (!validateDate(transactionData.date)) {
         toast.error('Data inválida');
-        return;
+        return reject(new Error('Invalid date'));
       }
       
       if (!['INCOME', 'EXPENSE'].includes(transactionData.type)) {
         toast.error('Tipo de transação inválido');
-        return;
+        return reject(new Error('Invalid type'));
       }
-
-    const category = categories.find(cat => cat.id === transactionData.categoryId);
-    if (!category) {
-      toast.error('Categoria não encontrada');
-      return;
-    }
 
       const sanitizedDescription = transactionData.description ? 
         sanitizeInput(transactionData.description).substring(0, 500) : undefined;
 
-    const newTransaction: Transaction = {
-      id: Date.now().toString(),
-      type: transactionData.type,
-      amount: transactionData.amount,
+        const response = await axios.post('/api/transactions', {
+          type: transactionData.type,
+          amount: transactionData.amount,
         description: sanitizedDescription,
-      date: transactionData.date,
-      category,
-      user: { name: user?.name || 'Usuário', email: user?.email || 'user@email.com' }
-    };
+          date: transactionData.date,
+          categoryId: transactionData.categoryId
+        });
 
-    setTransactions(prev => [newTransaction, ...prev]);
-    toast.success('Transação criada com sucesso');
-    } catch (error) {
-      console.error('Error adding transaction:', error);
-      toast.error('Erro ao criar transação');
-    }
+        const newTransaction = response.data;
+        setTransactions(prev => [newTransaction, ...prev]);
+        toast.success('Transação criada com sucesso');
+        resolve(newTransaction);
+      } catch (error: any) {
+        console.error('Error adding transaction:', error);
+        const message = error.response?.data?.error || 'Erro ao criar transação';
+        toast.error(message);
+        reject(error);
+      }
+    });
   };
 
   const updateTransaction = (id: string, transactionData: Omit<Transaction, 'id' | 'category' | 'user'> & { categoryId: string }) => {
-    try {
+    return new Promise(async (resolve, reject) => {
+      try {
       // Input validation
       if (!validateAmount(transactionData.amount)) {
         toast.error('Valor deve ser um número positivo válido');
-        return;
+        return reject(new Error('Invalid amount'));
       }
       
       if (!validateDate(transactionData.date)) {
         toast.error('Data inválida');
-        return;
+        return reject(new Error('Invalid date'));
       }
-
-    const category = categories.find(cat => cat.id === transactionData.categoryId);
-    if (!category) {
-      toast.error('Categoria não encontrada');
-      return;
-    }
 
       const sanitizedDescription = transactionData.description ? 
         sanitizeInput(transactionData.description).substring(0, 500) : undefined;
 
-    setTransactions(prev => prev.map(transaction => 
-      transaction.id === id 
-        ? {
-            ...transaction,
-            type: transactionData.type,
-            amount: transactionData.amount,
+        const response = await axios.put(`/api/transactions/${id}`, {
+          type: transactionData.type,
+          amount: transactionData.amount,
               description: sanitizedDescription,
-            date: transactionData.date,
-            category
-          }
-        : transaction
-    ));
-    
-    toast.success('Transação atualizada com sucesso');
-    } catch (error) {
-      console.error('Error updating transaction:', error);
-      toast.error('Erro ao atualizar transação');
-    }
+          date: transactionData.date,
+          categoryId: transactionData.categoryId
+        });
+
+        const updatedTransaction = response.data;
+        setTransactions(prev => prev.map(transaction => 
+          transaction.id === id ? updatedTransaction : transaction
+        ));
+        
+        toast.success('Transação atualizada com sucesso');
+        resolve(updatedTransaction);
+      } catch (error: any) {
+        console.error('Error updating transaction:', error);
+        const message = error.response?.data?.error || 'Erro ao atualizar transação';
+        toast.error(message);
+        reject(error);
+      }
+    });
   };
 
   const deleteTransaction = (id: string) => {
-    setTransactions(prev => prev.filter(t => t.id !== id));
-    toast.success('Transação excluída com sucesso');
+    return new Promise(async (resolve, reject) => {
+      try {
+        await axios.delete(`/api/transactions/${id}`);
+        setTransactions(prev => prev.filter(t => t.id !== id));
+        toast.success('Transação excluída com sucesso');
+        resolve(true);
+      } catch (error: any) {
+        console.error('Error deleting transaction:', error);
+        const message = error.response?.data?.error || 'Erro ao excluir transação';
+        toast.error(message);
+        reject(error);
+      }
+    });
   };
 
   const value = {

@@ -4,38 +4,52 @@ services:
   # Banco de dados PostgreSQL
   postgres:
     image: postgres:15-alpine
-    container_name: sistema-financas-db
+    container_name: financas-postgres
     restart: unless-stopped
     environment:
-      POSTGRES_DB: ${POSTGRES_DB:-sistema_financas}
-      POSTGRES_USER: ${POSTGRES_USER:-postgres}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-suasenha}
+      POSTGRES_DB: ${POSTGRES_DB:-financas_lar}
+      POSTGRES_USER: ${POSTGRES_USER:-financas_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-sua_senha_super_segura_aqui}
       POSTGRES_INITDB_ARGS: "--encoding=UTF-8 --lc-collate=C --lc-ctype=C"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+      - ./supabase/migrations:/docker-entrypoint-initdb.d
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-sistema_financas}"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-financas_user} -d ${POSTGRES_DB:-financas_lar}"]
       interval: 10s
       timeout: 5s
       retries: 5
     networks:
       - app-network
 
-  # Aplicação completa (frontend + backend)
+  # Aplicação completa
   app:
     build: 
       context: .
       dockerfile: Dockerfile
-    container_name: sistema-financas-app
+    container_name: financas-app
     environment:
-      # Variáveis do backend
-      DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-suasenha}@postgres:5432/${POSTGRES_DB:-sistema_financas}?schema=public
-      JWT_SECRET: ${JWT_SECRET:-seu_jwt_secret_aqui_muito_seguro}
+      # Database
+      DATABASE_URL: postgresql://${POSTGRES_USER:-financas_user}:${POSTGRES_PASSWORD:-sua_senha_super_segura_aqui}@postgres:5432/${POSTGRES_DB:-financas_lar}?schema=public
+      POSTGRES_USER: ${POSTGRES_USER:-financas_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-sua_senha_super_segura_aqui}
+      POSTGRES_DB: ${POSTGRES_DB:-financas_lar}
+      
+      # JWT & Security
+      JWT_SECRET: ${JWT_SECRET:-sua_chave_jwt_super_segura_de_pelo_menos_32_caracteres}
+      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-7d}
+      BCRYPT_ROUNDS: ${BCRYPT_ROUNDS:-12}
+      
+      # Application
       NODE_ENV: production
       PORT: 3001
       FRONTEND_URL: ${FRONTEND_URL:-http://localhost}
+      
+      # Rate Limiting
+      RATE_LIMIT_WINDOW_MS: ${RATE_LIMIT_WINDOW_MS:-900000}
+      RATE_LIMIT_MAX_REQUESTS: ${RATE_LIMIT_MAX_REQUESTS:-100}
     ports:
-      - "80:80"  # Nginx serve tudo na porta 80
+      - "3001:3001"
     depends_on:
       postgres:
         condition: service_healthy
@@ -43,10 +57,10 @@ services:
     networks:
       - app-network
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost/health"]
+      test: ["CMD", "curl", "-f", "http://localhost:3001/health"]
       interval: 30s
       timeout: 10s
-      start_period: 120s
+      start_period: 60s
       retries: 3
 
 volumes:

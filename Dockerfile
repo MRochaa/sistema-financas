@@ -18,38 +18,82 @@ COPY . .
 RUN npm run build
 
 # ============================================
-# ESTÁGIO 2: Imagem Final de Produção
+# ESTÁGIO 2: Build do Backend
+# ============================================
+FROM node:20-alpine AS backend-builder
+
+WORKDIR /app
+
+# Copia arquivos de dependências do backend
+COPY backend/package*.json ./
+
+# Instala dependências do backend
+RUN npm install
+
+# Copia código fonte do backend
+COPY backend/ ./
+
+# Gera o Prisma Client
+RUN npx prisma generate
+
+# ============================================
+# ESTÁGIO 3: Imagem Final de Produção
 # ============================================
 FROM node:20-alpine
 
-# Instala curl para health check
-RUN apk add --no-cache curl
+# Instala curl e outras dependências necessárias
+RUN apk add --no-cache curl postgresql-client
 
-# Cria diretório da aplicação
+# Cria usuário não-root para segurança
+RUN addgroup -g 1001 -S nodejs
+RUN adduser -S nextjs -u 1001
+
+# Cria diretórios necessários
 WORKDIR /app
 
 # Copia frontend compilado
-COPY --from=frontend-builder /app/dist ./dist
+COPY --from=frontend-builder /app/dist ./public
 
-# Copia servidor Node.js
-COPY server.js ./
+# Copia backend compilado
+COPY --from=backend-builder --chown=nextjs:nodejs /app ./
 
-# Cria package.json para o servidor
-RUN echo '{"name":"financas-server","version":"1.0.0","main":"server.js","dependencies":{"express":"^4.18.2"}}' > package.json
+# Cria script de inicialização
+RUN echo '#!/bin/sh\n\
+echo "🚀 Starting Finanças do Lar System..."\n\
+echo "📊 Environment: $NODE_ENV"\n\
+echo "🔗 Port: $PORT"\n\
+\n\
+# Wait for database to be ready\n\
+echo "⏳ Waiting for database..."\n\
+until pg_isready -h postgres -p 5432 -U $POSTGRES_USER; do\n\
+  echo "Database is unavailable - sleeping"\n\
+  sleep 2\n\
+done\n\
+echo "✅ Database is ready!"\n\
+\n\
+# Run database migrations\n\
+echo "🔄 Running database migrations..."\n\
+npx prisma migrate deploy\n\
+\n\
+# Start the application\n\
+echo "🎯 Starting application..."\n\
+exec node src/server.js' > /app/start.sh
 
-# Instala apenas o express
-RUN npm install --production
+RUN chmod +x /app/start.sh
+
+# Muda para usuário não-root
+USER nextjs
 
 # Variáveis de ambiente padrão
 ENV NODE_ENV=production \
-    PORT=3000
+    PORT=3001
 
-# Expõe porta 3000
-EXPOSE 3000
+# Expõe porta 3001
+EXPOSE 3001
 
 # Health check
-HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
-    CMD curl -f http://localhost:3000/health || exit 1
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
+    CMD curl -f http://localhost:3001/health || exit 1
 
 # Comando de inicialização
-CMD ["node", "server.js"]
+CMD ["/app/start.sh"]
