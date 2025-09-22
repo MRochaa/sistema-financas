@@ -69,37 +69,11 @@ COPY --from=frontend-builder --chown=nextjs:nodejs /app/dist ./public
 # Copia backend compilado
 COPY --from=backend-builder --chown=nextjs:nodejs /app ./
 
-# Cria script de inicialização
-RUN cat > /app/start.sh << 'EOF'
-#!/bin/sh
-echo "🚀 Starting Finanças do Lar System..."
-echo "📊 Environment: $NODE_ENV"
-echo "🔗 Port: $PORT"
-
-# Wait for database to be ready
-echo "⏳ Waiting for database..."
-until pg_isready -h postgres -p 5432 -U "$POSTGRES_USER" -d "$POSTGRES_DB"; do
-  echo "Database is unavailable - sleeping"
-  sleep 2
-done
-echo "✅ Database is ready!"
-
-# Run database migrations
-echo "🔄 Running database migrations..."
-npx prisma migrate deploy
-
-# Seed database with initial data
-echo "🌱 Seeding database..."
-node src/seed.js || echo "⚠️ Seeding failed or already completed"
-
-# Start the application
-echo "🎯 Starting application..."
-exec node src/server.js
-EOF
+# Copia script de inicialização
+COPY --from=backend-builder --chown=nextjs:nodejs /app/start.sh /app/start.sh
 
 # Define permissões e proprietário
-RUN chmod +x /app/start.sh && \
-    chown -R nextjs:nodejs /app
+RUN chmod +x /app/start.sh
 
 # Muda para usuário não-root
 USER nextjs

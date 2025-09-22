@@ -2,14 +2,8 @@ const { PrismaClient } = require('@prisma/client');
 
 const prisma = new PrismaClient({
   log: ['error', 'warn'],
-  errorFormat: 'minimal',
-  datasources: {
-    db: {
-      url: process.env.DATABASE_URL
-    }
-  }
+  errorFormat: 'minimal'
 });
-
 
 async function main() {
   console.log('🌱 Starting database seeding...');
