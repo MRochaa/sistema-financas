@@ -71,7 +71,7 @@ COPY --from=frontend-builder --chown=nextjs:nodejs /app/dist ./public
 # Copia backend compilado
 COPY --from=backend-builder --chown=nextjs:nodejs /app ./
 
-# Copia script de inicialização
+# Copia script de inicialização do backend
 COPY --chown=nextjs:nodejs backend/start.sh /app/start.sh
 
 # Define permissões

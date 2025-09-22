@@ -1,20 +1,22 @@
 version: '3.8'
 
 services:
-  # Banco de dados PostgreSQL
-  postgres:
+  # Banco de dados PostgreSQL com nomes únicos
+  financas-postgres:
     image: postgres:15-alpine
-    container_name: financas-postgres
+    container_name: financas-lar-postgres
     restart: unless-stopped
     environment:
-      POSTGRES_DB: ${POSTGRES_DB:-sistema_financas}
-      POSTGRES_USER: ${POSTGRES_USER:-postgres}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-suasenha}
+      POSTGRES_DB: ${FINANCAS_POSTGRES_DB:-financas_lar_db}
+      POSTGRES_USER: ${FINANCAS_POSTGRES_USER:-financas_user}
+      POSTGRES_PASSWORD: ${FINANCAS_POSTGRES_PASSWORD:-financas_senha_123}
       POSTGRES_INITDB_ARGS: "--encoding=UTF-8 --lc-collate=C --lc-ctype=C"
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      - financas_postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5433:5432"  # Porta diferente para evitar conflitos
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-sistema_financas}"]
+      test: ["CMD-SHELL", "pg_isready -U ${FINANCAS_POSTGRES_USER:-financas_user} -d ${FINANCAS_POSTGRES_DB:-financas_lar_db}"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -27,13 +29,15 @@ services:
     build: 
       context: .
       dockerfile: Dockerfile
-    container_name: financas-app
+    container_name: financas-lar-app
     environment:
-      # Database
-      DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-suasenha}@postgres:5432/${POSTGRES_DB:-sistema_financas}?schema=public
-      POSTGRES_USER: ${POSTGRES_USER:-postgres}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-suasenha}
-      POSTGRES_DB: ${POSTGRES_DB:-sistema_financas}
+      # Database com novos nomes
+      DATABASE_URL: postgresql://${FINANCAS_POSTGRES_USER:-financas_user}:${FINANCAS_POSTGRES_PASSWORD:-financas_senha_123}@financas-postgres:5432/${FINANCAS_POSTGRES_DB:-financas_lar_db}?schema=public
+      POSTGRES_USER: ${FINANCAS_POSTGRES_USER:-financas_user}
+      POSTGRES_PASSWORD: ${FINANCAS_POSTGRES_PASSWORD:-financas_senha_123}
+      POSTGRES_DB: ${FINANCAS_POSTGRES_DB:-financas_lar_db}
+      POSTGRES_HOST: financas-postgres
+      POSTGRES_PORT: 5432
       
       # JWT & Security
       JWT_SECRET: ${JWT_SECRET:-sua_chave_jwt_super_segura_de_pelo_menos_32_caracteres}
@@ -51,7 +55,7 @@ services:
     ports:
       - "3000:3000"
     depends_on:
-      postgres:
+      financas-postgres:
         condition: service_healthy
     restart: unless-stopped
     networks:
@@ -64,7 +68,7 @@ services:
       retries: 3
 
 volumes:
-  postgres_data:
+  financas_postgres_data:
     driver: local
 
 networks:
