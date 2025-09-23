@@ -22,69 +22,44 @@ model User {
   updatedAt DateTime @updatedAt
   
   // Relacionamentos
-  accounts Account[]
-  categories Category[]
   transactions Transaction[]
-  budgets Budget[]
 }
 
-// Modelo de Conta - representa contas bancárias/carteiras
-model Account {
-  id          String   @id @default(uuid())
-  name        String
-  type        String   // checking, savings, credit_card, cash
-  balance     Float    @default(0)
-  userId      String
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  
-  // Relacionamentos
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-  transactions Transaction[]
-  
-  @@index([userId])
-}
 
 // Modelo de Categoria - categorias de transações
 model Category {
   id        String   @id @default(uuid())
   name      String
-  type      String   // income, expense
+  type      String   // INCOME, EXPENSE
   icon      String?
   color     String?
-  userId    String
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   
   // Relacionamentos
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
   transactions Transaction[]
   budgets Budget[]
   
-  @@index([userId])
-  @@unique([name, userId])
+  @@index([name])
 }
 
 // Modelo de Transação - registros financeiros
 model Transaction {
   id          String   @id @default(uuid())
-  description String
+  description String?
   amount      Float
-  type        String   // income, expense, transfer
+  type        String   // INCOME, EXPENSE
   date        DateTime
   userId      String
-  accountId   String
-  categoryId  String?
+  categoryId  String
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
   
   // Relacionamentos
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-  account Account @relation(fields: [accountId], references: [id], onDelete: Cascade)
-  category Category? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  category Category @relation(fields: [categoryId], references: [id], onDelete: Cascade)
   
   @@index([userId])
-  @@index([accountId])
   @@index([categoryId])
   @@index([date])
 }
@@ -96,16 +71,13 @@ model Budget {
   period     String   // monthly, yearly
   startDate  DateTime
   endDate    DateTime
-  userId     String
   categoryId String
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
   
   // Relacionamentos
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
   category Category @relation(fields: [categoryId], references: [id], onDelete: Cascade)
   
-  @@index([userId])
   @@index([categoryId])
-  @@unique([userId, categoryId, period, startDate])
+  @@unique([categoryId, period, startDate])
 }

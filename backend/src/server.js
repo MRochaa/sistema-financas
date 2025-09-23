@@ -88,8 +88,9 @@ async function connectDatabase() {
     console.log('✅ Conectado ao banco de dados PostgreSQL');
     return true;
   } catch (error) {
-    console.error('❌ Erro ao conectar ao banco de dados:', error);
-    // Em produção, tenta reconectar após 5 segundos
+    console.error('❌ Erro ao conectar ao banco de dados:', error.message);
+    // Em produção, não falha imediatamente - permite que o servidor inicie
+    // O health check vai retornar 503 até a conexão ser estabelecida
     if (process.env.NODE_ENV === 'production') {
       console.log('Tentando reconectar em 5 segundos...');
       setTimeout(connectDatabase, 5000);
@@ -100,8 +101,8 @@ async function connectDatabase() {
 
 // Inicializa o servidor
 async function startServer() {
-  // Conecta ao banco de dados
-  await connectDatabase();
+  // Tenta conectar ao banco de dados (não bloqueia a inicialização)
+  connectDatabase();
   
   // Inicia o servidor Express
   app.listen(PORT, '0.0.0.0', () => {

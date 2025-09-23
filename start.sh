@@ -9,7 +9,9 @@ echo "Porta Backend: ${BACKEND_PORT:-$PORT}"
 
 # Função para verificar se o backend está pronto (não falha em HTTP 503)
 check_backend() {
-    curl -s http://localhost:${BACKEND_PORT:-3001}/api/health > /dev/null 2>&1
+    local response=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:${BACKEND_PORT:-3001}/api/health)
+    # Aceita 200 (OK) ou 503 (Service Unavailable - banco não conectado ainda)
+    [ "$response" = "200" ] || [ "$response" = "503" ]
     return $?
 }
 
@@ -35,8 +37,10 @@ if [ -n "${DATABASE_URL}" ]; then
         START_TS=$(date +%s)
         echo "Iniciando prisma migrate deploy..."
         npx prisma migrate deploy || echo "Aviso: migrações falharam (continuando)."
+        echo "Executando seed do banco de dados..."
+        npm run db:seed || echo "Aviso: seed falhou (continuando)."
         END_TS=$(date +%s)
-        echo "Migrações finalizadas em $((END_TS-START_TS))s"
+        echo "Migrações e seed finalizados em $((END_TS-START_TS))s"
     ) &
 else
     echo "DATABASE_URL não definido; pulando migrações do Prisma."

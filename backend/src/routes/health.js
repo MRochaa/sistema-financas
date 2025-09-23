@@ -13,8 +13,13 @@ const prisma = new PrismaClient();
 // GET /health - Verifica saúde da aplicação
 router.get('/', async (req, res) => {
   try {
-    // Testa conexão com banco de dados
-    await prisma.$queryRaw`SELECT 1`;
+    // Testa conexão com banco de dados com timeout
+    const dbPromise = prisma.$queryRaw`SELECT 1`;
+    const timeoutPromise = new Promise((_, reject) => 
+      setTimeout(() => reject(new Error('Database timeout')), 5000)
+    );
+    
+    await Promise.race([dbPromise, timeoutPromise]);
     
     // Retorna status de saúde
     res.status(200).json({
@@ -27,7 +32,7 @@ router.get('/', async (req, res) => {
     });
     
   } catch (error) {
-    console.error('Health check - Database error:', error);
+    console.error('Health check - Database error:', error.message);
     
     // Retorna 503 quando o banco não está disponível
     res.status(503).json({
