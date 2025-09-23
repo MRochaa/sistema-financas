@@ -88,9 +88,9 @@ PORT=3000
 # Expõe porta 3000 (Nginx)
 EXPOSE 3000
 
-# Health check que verifica se nginx está respondendo
+# Health check que verifica se nginx está respondendo (porta 3000)
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
-    CMD curl -f http://localhost/health || exit 1
+CMD curl -f http://localhost:3000/health || exit 1
 
 # Comando de inicialização
 CMD ["/start.sh"]

@@ -21,7 +21,7 @@ PORT=${PORT:-3001} node src/server.js &
 BACKEND_PID=$!
 
 # Inicia o Nginx imediatamente (para satisfazer o healthcheck /health)
-echo "Iniciando Nginx..."
+echo "Iniciando Nginx na porta 3000..."
 nginx -g "daemon off;" &
 NGINX_PID=$!
 
@@ -41,7 +41,7 @@ else
     echo "DATABASE_URL não definido; pulando migrações do Prisma."
 fi
 
-# Aguarda o backend iniciar (sem derrubar o container se demorar)
+# Aguarda o backend iniciar (sem derrubar o container se demorar) e adiciona diagnósticos
 echo "Aguardando backend iniciar (até 60s, sem abortar)..."
 WAIT_TIME=0
 MAX_WAIT=60
@@ -51,6 +51,12 @@ while [ $WAIT_TIME -lt $MAX_WAIT ]; do
         break
     fi
     echo "Aguardando backend... ($WAIT_TIME/$MAX_WAIT)"
+    echo "[diag] Tentando curl backend: curl -sv http://localhost:${PORT:-3001}/api/health"
+    curl -sv http://localhost:${PORT:-3001}/api/health || true
+    echo "[diag] Tentando curl nginx /health: curl -sv http://localhost:3000/health"
+    curl -sv http://localhost:3000/health || true
+    echo "[diag] Processos escutando portas:" && ss -lntp || netstat -lntp || true
+    echo "[diag] Trecho de config do Nginx:" && sed -n '1,120p' /etc/nginx/http.d/default.conf || true
     sleep 3
     WAIT_TIME=$((WAIT_TIME + 3))
 done
