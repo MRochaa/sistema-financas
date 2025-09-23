@@ -83,7 +83,7 @@ WORKDIR /app/backend
 
 # Variáveis de ambiente padrão
 ENV NODE_ENV=production \
-    PORT=3001
+PORT=3000
 
 # Expõe porta 80 para nginx
 EXPOSE 80

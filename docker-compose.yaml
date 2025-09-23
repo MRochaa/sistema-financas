@@ -8,12 +8,12 @@ services:
     environment:
       # Backend
       NODE_ENV: ${NODE_ENV:-production}
-      PORT: ${PORT:-3001}
+      PORT: ${PORT:-3000}
       DATABASE_URL: ${DATABASE_URL}
       JWT_SECRET: ${JWT_SECRET}
       
       # Frontend (se necessário)
-      VITE_API_URL: ${VITE_API_URL:-http://localhost/api}
+      VITE_API_URL: ${VITE_API_URL:-/api}
     
     # Health check personalizado
     healthcheck:
