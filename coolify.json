@@ -1,0 +1,21 @@
+{
+  "name": "Sistema Finanças do Lar",
+  "description": "Sistema completo de controle financeiro familiar",
+  "type": "dockerfile",
+  "dockerfile": "Dockerfile",
+  "port": 3000,
+  "healthcheck": {
+    "path": "/health",
+    "interval": 30,
+    "timeout": 10,
+    "retries": 3,
+    "start_period": 60
+  },
+  "environment": {
+    "NODE_ENV": "production",
+    "PORT": "3000"
+  },
+  "build_args": {},
+  "volumes": [],
+  "networks": []
+}
