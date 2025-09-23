@@ -18,8 +18,8 @@ const prisma = new PrismaClient({
     : ['query', 'info', 'warn', 'error'],
 });
 
-// Porta do servidor
-const PORT = process.env.PORT || 3000;
+// Porta do servidor (interno)
+const PORT = process.env.PORT || 3001;
 
 // Middlewares globais
 app.use(cors({

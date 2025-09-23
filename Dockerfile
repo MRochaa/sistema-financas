@@ -85,8 +85,8 @@ WORKDIR /app/backend
 ENV NODE_ENV=production \
 PORT=3000
 
-# Expõe porta 80 para nginx
-EXPOSE 80
+# Expõe porta 3000 (Nginx)
+EXPOSE 3000
 
 # Health check que verifica se nginx está respondendo
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \

@@ -9,15 +9,15 @@ echo "Porta Backend: $PORT"
 
 # Função para verificar se o backend está pronto (não falha em HTTP 503)
 check_backend() {
-    curl -s http://localhost:${PORT:-3000}/api/health > /dev/null 2>&1
+    curl -s http://localhost:${PORT:-3001}/api/health > /dev/null 2>&1
     return $?
 }
 
 cd /app/backend
 
 # Inicia o servidor Node.js primeiro (em background)
-echo "Iniciando backend na porta ${PORT:-3000}..."
-PORT=${PORT:-3000} node src/server.js &
+echo "Iniciando backend na porta ${PORT:-3001}..."
+PORT=${PORT:-3001} node src/server.js &
 BACKEND_PID=$!
 
 # Inicia o Nginx imediatamente (para satisfazer o healthcheck /health)
