@@ -1,13 +1,12 @@
 // ============================================
 // Servidor Principal - Sistema Financeiro
-// Versão Definitiva Corrigida
+// Versão Corrigida
 // ============================================
 
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
 
-// Tenta carregar Prisma se disponível
 let prisma = null;
 try {
     const { PrismaClient } = require('@prisma/client');
@@ -17,26 +16,17 @@ try {
     console.log('⚠️ Prisma não disponível, rodando sem banco de dados');
 }
 
-// Inicializa Express
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// ============================================
-// Middlewares
-// ============================================
 app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Servir frontend estático
 const publicPath = path.join(__dirname, '../public');
 app.use(express.static(publicPath));
 
-// ============================================
-// Rotas Essenciais
-// ============================================
-
-// HEALTH CHECK - CRÍTICO PARA COOLIFY
+// HEALTH CHECK
 app.get('/health', async (req, res) => {
     const health = {
         status: 'healthy',
@@ -46,7 +36,6 @@ app.get('/health', async (req, res) => {
         port: PORT
     };
 
-    // Testa banco se disponível
     if (prisma && process.env.DATABASE_URL) {
         try {
             await prisma.$queryRaw`SELECT 1`;
@@ -61,7 +50,6 @@ app.get('/health', async (req, res) => {
     res.status(200).json(health);
 });
 
-// API Root
 app.get('/api', (req, res) => {
     res.json({
         message: 'API Sistema Financeiro',
@@ -78,18 +66,12 @@ app.get('/api', (req, res) => {
     });
 });
 
-// ============================================
-// Dados em Memória (Fallback)
-// ============================================
+// In-memory fallback
 let inMemoryData = {
     transactions: [],
     accounts: [],
     categories: []
 };
-
-// ============================================
-// Rotas de Transações
-// ============================================
 
 // GET Transações
 app.get('/api/transactions', async (req, res) => {
@@ -118,7 +100,7 @@ app.get('/api/transactions', async (req, res) => {
 app.post('/api/transactions', async (req, res) => {
     try {
         const transactionData = req.body;
-        
+
         if (prisma && process.env.DATABASE_URL) {
             try {
                 const transaction = await prisma.transaction.create({
@@ -150,10 +132,6 @@ app.post('/api/transactions', async (req, res) => {
     }
 });
 
-// ============================================
-// Rotas de Contas
-// ============================================
-
 // GET Contas
 app.get('/api/accounts', async (req, res) => {
     try {
@@ -177,7 +155,7 @@ app.get('/api/accounts', async (req, res) => {
 app.post('/api/accounts', async (req, res) => {
     try {
         const accountData = req.body;
-        
+
         if (prisma && process.env.DATABASE_URL) {
             try {
                 const account = await prisma.account.create({
@@ -208,22 +186,18 @@ app.post('/api/accounts', async (req, res) => {
     }
 });
 
-// ============================================
-// Fallback para SPA - DEVE SER A ÚLTIMA ROTA
-// ============================================
+// Fallback SPA - deve ser última rota
 app.get('*', (req, res) => {
-    // Não servir index.html para rotas de API
     if (req.path.startsWith('/api')) {
         return res.status(404).json({ error: 'Endpoint não encontrado' });
     }
-    
+
     const indexPath = path.join(__dirname, '../public', 'index.html');
     const fs = require('fs');
-    
+
     if (fs.existsSync(indexPath)) {
         res.sendFile(indexPath);
     } else {
-        // Se não houver frontend, retorna informação da API
         res.json({
             message: 'Frontend não encontrado',
             info: 'API está funcionando normalmente',
@@ -233,9 +207,6 @@ app.get('*', (req, res) => {
     }
 });
 
-// ============================================
-// Tratamento de Erros
-// ============================================
 app.use((err, req, res, next) => {
     console.error('Erro no servidor:', err);
     res.status(500).json({
@@ -244,11 +215,7 @@ app.use((err, req, res, next) => {
     });
 });
 
-// ============================================
-// Inicialização
-// ============================================
 async function startServer() {
-    // Conecta ao banco se disponível
     if (prisma && process.env.DATABASE_URL) {
         try {
             await prisma.$connect();
@@ -259,7 +226,6 @@ async function startServer() {
         }
     }
 
-    // Inicia servidor
     app.listen(PORT, '0.0.0.0', () => {
         console.log('========================================');
         console.log('🚀 SERVIDOR INICIADO COM SUCESSO');
@@ -272,35 +238,26 @@ async function startServer() {
     });
 }
 
-// Shutdown gracioso
 process.on('SIGTERM', async () => {
     console.log('📛 Encerrando servidor...');
-    if (prisma) {
-        await prisma.$disconnect();
-    }
+    if (prisma) await prisma.$disconnect();
     process.exit(0);
 });
 
 process.on('SIGINT', async () => {
     console.log('📛 Encerrando servidor...');
-    if (prisma) {
-        await prisma.$disconnect();
-    }
+    if (prisma) await prisma.$disconnect();
     process.exit(0);
 });
 
-// Tratamento de erros não capturados
 process.on('uncaughtException', (error) => {
     console.error('❌ Erro não capturado:', error);
-    // Não encerra o processo para manter o container vivo
 });
 
 process.on('unhandledRejection', (error) => {
     console.error('❌ Promise rejeitada:', error);
-    // Não encerra o processo para manter o container vivo
 });
 
-// Inicia o servidor
 startServer().catch(error => {
     console.error('❌ Erro fatal ao iniciar:', error);
     process.exit(1);
