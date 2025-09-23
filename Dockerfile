@@ -2,7 +2,6 @@
 # ESTÁGIO 1: Build do Frontend
 # ============================================
 FROM node:20-alpine AS frontend-builder
-
 WORKDIR /app
 
 # Instala dependências necessárias para build
@@ -24,7 +23,6 @@ RUN npm run build
 # ESTÁGIO 2: Build do Backend
 # ============================================
 FROM node:20-alpine AS backend-builder
-
 WORKDIR /app
 
 # Instala dependências necessárias para o Prisma no Alpine
@@ -77,6 +75,13 @@ COPY --from=frontend-builder --chown=nextjs:nodejs /app/dist ./public
 # Copia backend compilado
 COPY --from=backend-builder --chown=nextjs:nodejs /app ./
 
+# Cria script de healthcheck
+# Este script verifica se o servidor está respondendo na porta correta
+RUN echo '#!/bin/sh' > /app/healthcheck.sh && \
+    echo 'curl -f http://localhost:${PORT:-3000}/health || exit 1' >> /app/healthcheck.sh && \
+    chmod +x /app/healthcheck.sh && \
+    chown nextjs:nodejs /app/healthcheck.sh
+
 # Define permissões
 RUN chown -R nextjs:nodejs /app
 
@@ -90,5 +95,13 @@ ENV NODE_ENV=production \
 # Expõe porta 3000
 EXPOSE 3000
 
-# Comando de inicialização direto (sem script externo)
+# HEALTHCHECK CRÍTICO PARA O COOLIFY
+# Verifica a cada 30 segundos se o servidor está respondendo
+# Aguarda 60 segundos iniciais antes de começar as verificações
+# Timeout de 10 segundos para cada verificação
+# 3 tentativas antes de considerar unhealthy
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
+    CMD curl -f http://localhost:3000/health || exit 1
+
+# Comando de inicialização direto
 CMD ["node", "src/server.js"]
