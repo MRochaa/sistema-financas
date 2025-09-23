@@ -53,11 +53,11 @@ app.get('/api', (req, res) => {
 });
 
 // Importa e usa as rotas da aplicação
-import authRoutes from '../routes/auth.js';
-import transactionsRoutes from '../routes/transactions.js';
-import categoriesRoutes from '../routes/categories.js';
-import dashboardRoutes from '../routes/dashboard.js';
-import healthRoutes from '../routes/health.js';
+import authRoutes from './routes/auth.js';
+import transactionsRoutes from './routes/transactions.js';
+import categoriesRoutes from './routes/categories.js';
+import dashboardRoutes from './routes/dashboard.js';
+import healthRoutes from './routes/health.js';
 
 // Registra as rotas existentes
 app.use('/api/health', healthRoutes); // mantém rota de health prefixada

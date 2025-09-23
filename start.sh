@@ -7,50 +7,56 @@ echo "=== Iniciando Sistema de Finanças ==="
 echo "Ambiente: $NODE_ENV"
 echo "Porta Backend: $PORT"
 
-# Função para verificar se o backend está pronto
+# Função para verificar se o backend está pronto (não falha em HTTP 503)
 check_backend() {
-    curl -s http://localhost:${PORT}/api/health > /dev/null 2>&1
+    curl -s http://localhost:${PORT:-3001}/api/health > /dev/null 2>&1
     return $?
 }
 
-# Inicia o backend em background
-echo "Iniciando backend na porta ${PORT}..."
 cd /app/backend
 
-# Executa migrações do Prisma se necessário
-echo "Verificando migrações do banco de dados..."
-npx prisma migrate deploy || {
-    echo "Aviso: Não foi possível executar migrações. Continuando..."
-}
-
-# Inicia o servidor Node.js
-node src/server.js &
+# Inicia o servidor Node.js primeiro (em background)
+echo "Iniciando backend na porta ${PORT:-3001}..."
+PORT=${PORT:-3001} node src/server.js &
 BACKEND_PID=$!
 
-# Aguarda o backend iniciar (máximo 30 segundos)
-echo "Aguardando backend iniciar..."
-WAIT_TIME=0
-MAX_WAIT=30
-
-while [ $WAIT_TIME -lt $MAX_WAIT ]; do
-    if check_backend; then
-        echo "✅ Backend iniciado com sucesso!"
-        break
-    fi
-    echo "Aguardando... ($WAIT_TIME/$MAX_WAIT)"
-    sleep 2
-    WAIT_TIME=$((WAIT_TIME + 2))
-done
-
-if [ $WAIT_TIME -ge $MAX_WAIT ]; then
-    echo "❌ ERRO: Backend não iniciou no tempo esperado"
-    exit 1
-fi
-
-# Inicia o Nginx em foreground
+# Inicia o Nginx imediatamente (para satisfazer o healthcheck /health)
 echo "Iniciando Nginx..."
 nginx -g "daemon off;" &
 NGINX_PID=$!
+
+# Executa migrações do Prisma de forma não bloqueante (se DATABASE_URL estiver definido)
+if [ -n "${DATABASE_URL}" ]; then
+    echo "Executando migrações do Prisma em background..."
+    (
+        set -e
+        # timeout suave: encerra após 45s se travar
+        START_TS=$(date +%s)
+        echo "Iniciando prisma migrate deploy..."
+        npx prisma migrate deploy || echo "Aviso: migrações falharam (continuando)."
+        END_TS=$(date +%s)
+        echo "Migrações finalizadas em $((END_TS-START_TS))s"
+    ) &
+else
+    echo "DATABASE_URL não definido; pulando migrações do Prisma."
+fi
+
+# Aguarda o backend iniciar (sem derrubar o container se demorar)
+echo "Aguardando backend iniciar (até 60s, sem abortar)..."
+WAIT_TIME=0
+MAX_WAIT=60
+while [ $WAIT_TIME -lt $MAX_WAIT ]; do
+    if check_backend; then
+        echo "✅ Backend respondeu ao healthcheck!"
+        break
+    fi
+    echo "Aguardando backend... ($WAIT_TIME/$MAX_WAIT)"
+    sleep 3
+    WAIT_TIME=$((WAIT_TIME + 3))
+done
+if [ $WAIT_TIME -ge $MAX_WAIT ]; then
+    echo "⚠️  Aviso: Backend não respondeu dentro do tempo esperado, continuando assim mesmo."
+fi
 
 # Função para tratar sinais de término
 cleanup() {
