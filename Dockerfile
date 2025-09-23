@@ -82,8 +82,7 @@ RUN chmod +x /start.sh
 WORKDIR /app/backend
 
 # Variáveis de ambiente padrão
-ENV NODE_ENV=production \
-PORT=3000
+ENV NODE_ENV=production
 
 # Expõe porta 3000 (Nginx)
 EXPOSE 3000
