@@ -95,7 +95,7 @@ EXPOSE 3000
 
 # Health check integrado
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
-    CMD curl -f http://localhost:3000/health || exit 1
+    CMD curl -f http://localhost:3000/health --max-time 5 || exit 1
 
 # Comando de inicialização
 CMD ["/app/start.sh"]

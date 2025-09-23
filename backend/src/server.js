@@ -170,6 +170,11 @@ const PORT = process.env.PORT || 3000;
 // Start server
 async function startServer() {
   try {
+    console.log('🚀 Initializing server...');
+    console.log('📊 Environment:', process.env.NODE_ENV);
+    console.log('🔗 Port:', PORT);
+    console.log('🗄️ Database URL configured:', !!process.env.DATABASE_URL);
+    
     // Initialize Prisma
     if (!prisma) {
       prisma = initializePrisma();
@@ -181,7 +186,8 @@ async function startServer() {
         await prisma.$connect();
         console.log('✅ Database connected successfully');
       } catch (error) {
-        console.error('⚠️ Database connection failed, but starting server anyway:', error.message);
+        console.error('⚠️ Database connection failed:', error.message);
+        console.log('🔄 Server will continue without database connection');
       }
     }
     
@@ -190,9 +196,11 @@ async function startServer() {
       console.log(`📊 Environment: ${process.env.NODE_ENV || 'development'}`);
       console.log(`🔗 Health check: http://localhost:${PORT}/health`);
       console.log(`🗄️ Database: ${process.env.FINANCAS_POSTGRES_DB || 'Not configured'}`);
+      console.log('✅ Server started successfully');
     });
   } catch (error) {
     console.error('❌ Failed to start server:', error);
+    console.error('Stack trace:', error.stack);
     process.exit(1);
   }
 }

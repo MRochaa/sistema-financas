@@ -15,7 +15,6 @@
     "NODE_ENV": "production",
     "PORT": "3000"
   },
-  "build_args": {},
-  "volumes": [],
-  "networks": []
+  "build_method": "dockerfile_only",
+  "deploy_type": "application"
 }

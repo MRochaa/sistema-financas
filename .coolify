@@ -1,5 +1,10 @@
-# Configuração para Coolify - Deploy apenas com Dockerfile
+# Configuração para Coolify - Deploy APENAS com Dockerfile
 # IMPORTANTE: NÃO usar docker-compose, apenas Dockerfile
+
+# Build method: Dockerfile only
+# Port: 3000
+# Health check: GET /health
+# Deploy type: Application (não Docker Compose)
 
 # Variáveis de ambiente necessárias:
 # DATABASE_URL=postgresql://financas_user:financas_senha_123@q8oo8gc4c8c4c0ccs4g800ws:5432/financas_lar_db?schema=public
@@ -10,7 +15,3 @@
 # FRONTEND_URL=https://es4ckok8g0k0sgo0w0o044kk.82.25.65.212.sslip.io
 # NODE_ENV=production
 # PORT=3000
-
-# Porta da aplicação: 3000
-# Health check: GET /health
-# Build method: Dockerfile only (não usar docker-compose)
