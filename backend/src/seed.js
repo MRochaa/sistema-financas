@@ -1,7 +1,7 @@
 const { PrismaClient } = require('@prisma/client');
 
 const prisma = new PrismaClient({
-  log: ['error', 'warn'],
+  log: ['error'],
   errorFormat: 'minimal',
   datasources: {
     db: {
@@ -11,22 +11,22 @@ const prisma = new PrismaClient({
 });
 
 async function main() {
-  console.log('🌱 Starting database seeding...');
+  console.log('🌱 Checking if seeding is needed...');
 
   try {
     // Test connection first
     await prisma.$connect();
-    console.log('✅ Database connection established');
+    console.log('✅ Seed: Database connection established');
 
     // Check if categories already exist
     const existingCategories = await prisma.category.count();
     
     if (existingCategories > 0) {
-      console.log('📊 Categories already exist, skipping seed');
+      console.log('📊 Seed: Categories already exist, skipping');
       return;
     }
 
-    console.log('📝 Creating default categories...');
+    console.log('📝 Seed: Creating default categories...');
 
     // Create default categories
     const categories = [
@@ -53,7 +53,7 @@ async function main() {
     const firstUser = await prisma.user.findFirst();
     
     if (!firstUser) {
-      console.log('⚠️ No users found, categories will be created when first user registers');
+      console.log('⚠️ Seed: No users found, will seed on first user registration');
       return;
     }
 
@@ -73,19 +73,18 @@ async function main() {
       }
     }
 
-    console.log(`✅ Created ${createdCount} default categories`);
-    console.log('🎉 Database seeding completed successfully!');
+    console.log(`✅ Seed: Created ${createdCount} default categories`);
 
   } catch (error) {
-    console.error('❌ Error seeding database:', error);
-    throw error;
+    console.error('❌ Seed error (non-fatal):', error.message);
+    // Don't throw - let the application continue
   }
 }
 
 main()
   .catch((e) => {
-    console.error('❌ Seeding failed:', e);
-    process.exit(1);
+    console.error('❌ Seeding failed (non-fatal):', e.message);
+    process.exit(0); // Exit successfully even if seeding fails
   })
   .finally(async () => {
     await prisma.$disconnect();

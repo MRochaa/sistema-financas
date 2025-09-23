@@ -77,11 +77,8 @@ COPY --from=frontend-builder --chown=nextjs:nodejs /app/dist ./public
 # Copia backend compilado
 COPY --from=backend-builder --chown=nextjs:nodejs /app ./
 
-# Copia script de inicialização do backend
-COPY --chown=nextjs:nodejs backend/start.sh /app/start.sh
-
 # Define permissões
-RUN chmod +x /app/start.sh
+RUN chown -R nextjs:nodejs /app
 
 # Muda para usuário não-root
 USER nextjs
@@ -93,9 +90,5 @@ ENV NODE_ENV=production \
 # Expõe porta 3000
 EXPOSE 3000
 
-# Health check integrado
-HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
-    CMD curl -f http://localhost:3000/health --max-time 5 || exit 1
-
-# Comando de inicialização
-CMD ["/app/start.sh"]
+# Comando de inicialização direto (sem script externo)
+CMD ["node", "src/server.js"]
