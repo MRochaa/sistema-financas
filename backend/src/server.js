@@ -1,10 +1,10 @@
 // Servidor principal da aplicação
 // Gerencia a inicialização do Express e conexão com banco de dados
 
-const express = require('express');
-const cors = require('cors');
-const dotenv = require('dotenv');
-const { PrismaClient } = require('@prisma/client');
+import express from 'express';
+import cors from 'cors';
+import dotenv from 'dotenv';
+import { PrismaClient } from '@prisma/client';
 
 // Carrega variáveis de ambiente
 dotenv.config();
@@ -53,25 +53,18 @@ app.get('/api', (req, res) => {
 });
 
 // Importa e usa as rotas da aplicação
-try {
-  const authRoutes = require('../routes/auth');
-  const accountRoutes = require('../routes/accounts');
-  const transactionRoutes = require('../routes/transactions');
-  const categoryRoutes = require('../routes/categories');
-  const budgetRoutes = require('../routes/budgets');
-  const dashboardRoutes = require('../routes/dashboard');
-  
-  // Registra as rotas
-  app.use('/api/auth', authRoutes);
-  app.use('/api/accounts', accountRoutes);
-  app.use('/api/transactions', transactionRoutes);
-  app.use('/api/categories', categoryRoutes);
-  app.use('/api/budgets', budgetRoutes);
-  app.use('/api/dashboard', dashboardRoutes);
-} catch (error) {
-  console.error('Erro ao carregar rotas:', error);
-  // Continua mesmo se algumas rotas falharem
-}
+import authRoutes from '../routes/auth.js';
+import transactionsRoutes from '../routes/transactions.js';
+import categoriesRoutes from '../routes/categories.js';
+import dashboardRoutes from '../routes/dashboard.js';
+import healthRoutes from '../routes/health.js';
+
+// Registra as rotas existentes
+app.use('/api/health', healthRoutes); // mantém rota de health prefixada
+app.use('/api/auth', authRoutes);
+app.use('/api/transactions', transactionsRoutes);
+app.use('/api/categories', categoriesRoutes);
+app.use('/api/dashboard', dashboardRoutes);
 
 // Middleware de tratamento de erros global
 app.use((err, req, res, next) => {
@@ -140,4 +133,4 @@ startServer().catch(error => {
 });
 
 // Exporta app e prisma para uso em outros módulos
-module.exports = { app, prisma };
+export { app, prisma };

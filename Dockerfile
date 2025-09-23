@@ -18,7 +18,9 @@ COPY frontend/ ./frontend/
 
 # Executa o build do frontend
 WORKDIR /app/frontend
-RUN npm run build
+ARG VITE_API_URL=/api
+ENV VITE_API_URL=${VITE_API_URL}
+RUN VITE_API_URL=${VITE_API_URL} npm run build
 
 # ============================================
 # ESTÁGIO 2: Build do Backend
