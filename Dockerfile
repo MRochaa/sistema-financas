@@ -5,18 +5,18 @@ FROM node:20-alpine AS frontend-builder
 
 WORKDIR /app
 
-# Copia arquivos de dependências do frontend
+# Copia arquivos de dependências do frontend (pasta frontend/)
 COPY frontend/package*.json ./frontend/
 
 # Instala TODAS as dependências (incluindo dev) para o build
 WORKDIR /app/frontend
 RUN npm install
 
-# Copia código fonte do frontend
+# Copia código fonte do frontend (pasta frontend/)
 WORKDIR /app
 COPY frontend/ ./frontend/
 
-# Executa o build do frontend
+# Executa o build do frontend (vite em /app/frontend)
 WORKDIR /app/frontend
 ARG VITE_API_URL=/api
 ENV VITE_API_URL=${VITE_API_URL}
@@ -68,7 +68,7 @@ RUN mkdir -p /var/log/nginx /var/cache/nginx /var/run/nginx /usr/share/nginx/htm
 # Copia backend compilado com node_modules e prisma client gerado
 COPY --from=backend-builder /app /app/backend
 
-# Copia frontend compilado (apenas os arquivos estáticos gerados)
+# Copia frontend compilado da pasta frontend/
 COPY --from=frontend-builder /app/frontend/dist /usr/share/nginx/html
 
 # Copia arquivos de configuração
