@@ -1,57 +1,17 @@
-# docker-compose.yaml - Configuração para deploy no Coolify
 version: '3.8'
 
 services:
   app:
-    # Nome do serviço principal
-    build:
-      context: .
-      dockerfile: Dockerfile
-    
-    # Nome do container (será sobrescrito pelo Coolify)
-    container_name: sistema-financas
-    
-    # Porta exposta
+    build: .
     ports:
-      - "${PORT:-3000}:3000"
-    
-    # Variáveis de ambiente
+      - "3000:3000"
     environment:
       - NODE_ENV=production
-      - PORT=${PORT:-3000}
-      - DATABASE_URL=${DATABASE_URL}
-      - JWT_SECRET=${JWT_SECRET}
-      - FRONTEND_URL=${FRONTEND_URL:-http://localhost:3000}
-    
-    # Health check para o Docker Compose
+      - PORT=3000
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 60s
-    
-    # Política de restart
     restart: unless-stopped
-    
-    # Limites de recursos (ajuste conforme necessário)
-    deploy:
-      resources:
-        limits:
-          cpus: '1'
-          memory: 512M
-        reservations:
-          cpus: '0.25'
-          memory: 128M
-    
-    # Rede
-    networks:
-      - coolify
-      - default
-
-# Redes
-networks:
-  coolify:
-    external: true
-  default:
-    driver: bridge
