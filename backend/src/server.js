@@ -53,7 +53,9 @@ app.use(cors({
     process.env.FRONTEND_URL || 'http://localhost:3000',
     'https://es4ckok8g0k0sgo0w0o044kk.82.25.65.212.sslip.io',
     'https://esgcwcsso0go4ck4ogs8ko8o.82.25.65.212.sslip.io',
-    /\.sslip\.io$/
+    /\.sslip\.io$/,
+    'http://localhost:5173', // Vite dev server
+    'http://127.0.0.1:5173'
   ],
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
@@ -77,7 +79,9 @@ app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
 // Request logging
 app.use((req, res, next) => {
-  console.log(`${new Date().toISOString()} - ${req.method} ${req.url}`);
+  if (req.url !== '/health') {
+    console.log(`${new Date().toISOString()} - ${req.method} ${req.url} - ${req.ip}`);
+  }
   next();
 });
 

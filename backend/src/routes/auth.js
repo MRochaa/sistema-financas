@@ -33,9 +33,12 @@ router.post('/register', [
     .withMessage('Name must be between 2 and 100 characters')
 ], async (req, res) => {
   try {
+    console.log('Register attempt:', { email: req.body.email, name: req.body.name });
+    
     // Check validation errors
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
+      console.log('Validation errors:', errors.array());
       return res.status(400).json({ 
         error: 'Validation failed', 
         details: errors.array() 
@@ -121,7 +124,20 @@ router.post('/register', [
 
   } catch (error) {
     console.error('Register error:', error);
-    res.status(500).json({ error: 'Internal server error' });
+    
+    // Handle specific Prisma errors
+    if (error.code === 'P2002') {
+      return res.status(400).json({ error: 'User with this email already exists' });
+    }
+    
+    if (error.name === 'PrismaClientKnownRequestError') {
+      return res.status(400).json({ error: 'Database error: ' + error.message });
+    }
+    
+    res.status(500).json({ 
+      error: 'Internal server error',
+      details: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
   }
 });
 

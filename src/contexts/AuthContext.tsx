@@ -45,9 +45,19 @@ export const useAuth = () => {
 axios.defaults.timeout = 10000; // 10 second timeout
 
 // Configure base URL baseado no ambiente
-if (typeof window !== 'undefined') {
-  axios.defaults.baseURL = window.location.origin;
-}
+const getBaseURL = () => {
+  if (typeof window !== 'undefined') {
+    // Em produção, usar a mesma origem
+    if (window.location.hostname.includes('sslip.io') || window.location.hostname.includes('coolify')) {
+      return window.location.origin;
+    }
+    // Em desenvolvimento local
+    return window.location.origin;
+  }
+  return '';
+};
+
+axios.defaults.baseURL = getBaseURL();
 
 // Add request interceptor for security headers
 axios.interceptors.request.use((config) => {
