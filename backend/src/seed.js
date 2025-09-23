@@ -41,8 +41,9 @@ async function main() {
 
 main()
   .catch((e) => {
-    console.error(e);
-    process.exit(1);
+    console.error('Erro durante seed:', e.message);
+    // Não usar process.exit(1) para evitar crash do container
+    // process.exit(1);
   })
   .finally(async () => {
     await prisma.$disconnect();

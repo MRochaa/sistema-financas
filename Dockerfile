@@ -74,9 +74,10 @@ COPY --from=frontend-builder /app/frontend/dist /usr/share/nginx/html
 # Copia arquivos de configuração
 COPY nginx.conf /etc/nginx/http.d/default.conf
 COPY start.sh /start.sh
+COPY debug-container.sh /debug-container.sh
 
-# Ajusta permissões do script
-RUN chmod +x /start.sh
+# Ajusta permissões dos scripts
+RUN chmod +x /start.sh /debug-container.sh
 
 # Define diretório de trabalho
 WORKDIR /app/backend

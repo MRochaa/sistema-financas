@@ -105,14 +105,44 @@ async function startServer() {
   connectDatabase();
   
   // Inicia o servidor Express
-  app.listen(PORT, '0.0.0.0', () => {
+  const server = app.listen(PORT, '0.0.0.0', () => {
     console.log('========================================');
     console.log(`🚀 Servidor rodando na porta ${PORT}`);
     console.log(`📊 Ambiente: ${process.env.NODE_ENV}`);
     console.log(`🔗 API disponível em http://localhost:${PORT}/api`);
     console.log('========================================');
   });
+
+  // Tratamento de erros do servidor
+  server.on('error', (error) => {
+    if (error.code === 'EADDRINUSE') {
+      console.error(`❌ Porta ${PORT} já está em uso`);
+    } else {
+      console.error('❌ Erro no servidor:', error);
+    }
+    // Não sair imediatamente em produção
+    if (process.env.NODE_ENV !== 'production') {
+      process.exit(1);
+    }
+  });
 }
+
+// Tratamento de erros não capturados
+process.on('uncaughtException', (error) => {
+  console.error('❌ Erro não capturado:', error);
+  // Em produção, não sair imediatamente
+  if (process.env.NODE_ENV !== 'production') {
+    process.exit(1);
+  }
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('❌ Promise rejeitada não tratada:', reason);
+  // Em produção, não sair imediatamente
+  if (process.env.NODE_ENV !== 'production') {
+    process.exit(1);
+  }
+});
 
 // Tratamento de sinais para shutdown gracioso
 process.on('SIGTERM', async () => {
@@ -130,7 +160,19 @@ process.on('SIGINT', async () => {
 // Inicia o servidor
 startServer().catch(error => {
   console.error('Erro fatal ao iniciar servidor:', error);
-  process.exit(1);
+  // Em produção, não sair imediatamente - tentar reconectar
+  if (process.env.NODE_ENV === 'production') {
+    console.log('Tentando reiniciar em 10 segundos...');
+    setTimeout(() => {
+      startServer().catch(err => {
+        console.error('Falha ao reiniciar servidor:', err);
+        // Só sair após múltiplas tentativas
+        process.exit(1);
+      });
+    }, 10000);
+  } else {
+    process.exit(1);
+  }
 });
 
 // Exporta app e prisma para uso em outros módulos
