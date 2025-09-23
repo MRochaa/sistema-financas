@@ -18,8 +18,8 @@ const prisma = new PrismaClient({
     : ['query', 'info', 'warn', 'error'],
 });
 
-// Porta do servidor (interno)
-const PORT = process.env.PORT || 3001;
+// Porta do servidor (interno) – usa BACKEND_PORT para evitar conflito com Nginx
+const PORT = process.env.BACKEND_PORT || 3001;
 
 // Middlewares globais
 app.use(cors({

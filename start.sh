@@ -5,19 +5,20 @@
 
 echo "=== Iniciando Sistema de Finanças ==="
 echo "Ambiente: $NODE_ENV"
-echo "Porta Backend: $PORT"
+echo "Porta Backend: ${BACKEND_PORT:-$PORT}"
 
 # Função para verificar se o backend está pronto (não falha em HTTP 503)
 check_backend() {
-    curl -s http://localhost:${PORT:-3001}/api/health > /dev/null 2>&1
+    curl -s http://localhost:${BACKEND_PORT:-3001}/api/health > /dev/null 2>&1
     return $?
 }
 
 cd /app/backend
 
 # Inicia o servidor Node.js primeiro (em background)
-echo "Iniciando backend na porta ${PORT:-3001}..."
-PORT=${PORT:-3001} node src/server.js &
+BACKEND_PORT=${BACKEND_PORT:-3001}
+echo "Iniciando backend na porta ${BACKEND_PORT}..."
+BACKEND_PORT=${BACKEND_PORT} node src/server.js &
 BACKEND_PID=$!
 
 # Inicia o Nginx imediatamente (para satisfazer o healthcheck /health)
@@ -51,8 +52,8 @@ while [ $WAIT_TIME -lt $MAX_WAIT ]; do
         break
     fi
     echo "Aguardando backend... ($WAIT_TIME/$MAX_WAIT)"
-    echo "[diag] Tentando curl backend: curl -sv http://localhost:${PORT:-3001}/api/health"
-    curl -sv http://localhost:${PORT:-3001}/api/health || true
+    echo "[diag] Tentando curl backend: curl -sv http://localhost:${BACKEND_PORT:-3001}/api/health"
+    curl -sv http://localhost:${BACKEND_PORT:-3001}/api/health || true
     echo "[diag] Tentando curl nginx /health: curl -sv http://localhost:3000/health"
     curl -sv http://localhost:3000/health || true
     echo "[diag] Processos escutando portas:" && ss -lntp || netstat -lntp || true
