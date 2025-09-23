@@ -1,182 +1,147 @@
 // ============================================
 // Servidor Principal - Sistema Financeiro
+// Versão Definitiva para Deploy
 // ============================================
 
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
-const { PrismaClient } = require('@prisma/client');
 
-// Inicializa Express e Prisma
+// Tenta carregar Prisma se disponível
+let prisma = null;
+try {
+    const { PrismaClient } = require('@prisma/client');
+    prisma = new PrismaClient();
+    console.log('✅ Prisma Client carregado');
+} catch (error) {
+    console.log('⚠️ Prisma não disponível, rodando sem banco de dados');
+}
+
+// Inicializa Express
 const app = express();
-const prisma = new PrismaClient();
-
-// Configuração de porta (usa variável de ambiente ou 3000 como padrão)
 const PORT = process.env.PORT || 3000;
 
 // ============================================
 // Middlewares
 // ============================================
-
-// CORS - Permite requisições de diferentes origens
-app.use(cors({
-    origin: process.env.FRONTEND_URL || '*', // Em produção, especifique a URL exata
-    credentials: true
-}));
-
-// Parser JSON - Permite receber JSON no body das requisições
+app.use(cors());
 app.use(express.json());
-
-// Parser URL Encoded - Permite receber dados de formulários
 app.use(express.urlencoded({ extended: true }));
 
-// Servir arquivos estáticos do frontend (se existirem)
-if (process.env.NODE_ENV === 'production') {
-    app.use(express.static(path.join(__dirname, '../public')));
-}
+// Servir frontend estático
+const publicPath = path.join(__dirname, '../public');
+app.use(express.static(publicPath));
+console.log('📁 Servindo arquivos estáticos de:', publicPath);
 
 // ============================================
-// Rotas Críticas para Deploy
+// Rotas Essenciais
 // ============================================
 
-// ROTA DE HEALTH CHECK - OBRIGATÓRIA PARA O COOLIFY
-// Esta rota é verificada pelo Docker para saber se o app está funcionando
+// HEALTH CHECK - CRÍTICO PARA COOLIFY
 app.get('/health', async (req, res) => {
-    try {
-        // Testa conexão com banco de dados (se configurado)
-        if (process.env.DATABASE_URL) {
+    const health = {
+        status: 'healthy',
+        timestamp: new Date().toISOString(),
+        uptime: process.uptime(),
+        environment: process.env.NODE_ENV,
+        port: PORT
+    };
+
+    // Testa banco se disponível
+    if (prisma) {
+        try {
             await prisma.$queryRaw`SELECT 1`;
+            health.database = 'connected';
+        } catch (error) {
+            health.database = 'disconnected';
+            health.dbError = error.message;
         }
-        
-        // Retorna status de saúde
-        res.status(200).json({ 
-            status: 'healthy',
-            timestamp: new Date().toISOString(),
-            uptime: process.uptime(),
-            environment: process.env.NODE_ENV || 'development'
-        });
-    } catch (error) {
-        // Se houver erro, ainda retorna 200 mas indica o problema
-        console.error('Health check warning:', error.message);
-        res.status(200).json({ 
-            status: 'healthy', // Mantém healthy para não derrubar o container
-            warning: 'Database connection issue',
-            timestamp: new Date().toISOString()
-        });
+    } else {
+        health.database = 'not configured';
     }
+
+    res.status(200).json(health);
 });
 
-// Rota raiz - Página inicial
-app.get('/', (req, res) => {
-    res.json({
-        message: 'Sistema Financeiro - API Operacional',
-        version: '1.0.0',
-        endpoints: {
-            health: '/health',
-            api: '/api'
-        }
-    });
-});
-
-// Rota de informações da API
+// Informações da API
 app.get('/api', (req, res) => {
     res.json({
-        message: 'API do Sistema Financeiro',
+        message: 'API Sistema Financeiro',
         version: '1.0.0',
-        status: 'operational'
+        status: 'operational',
+        database: prisma ? 'configured' : 'not configured',
+        endpoints: {
+            health: '/health',
+            api: '/api',
+            transactions: '/api/transactions',
+            accounts: '/api/accounts',
+            categories: '/api/categories'
+        }
     });
 });
 
 // ============================================
-// Suas Rotas de API aqui
+// Rotas de Negócio
 // ============================================
 
-// Exemplo de rota para transações
+// Armazenamento em memória (fallback se não houver DB)
+let inMemoryData = {
+    transactions: [],
+    accounts: [],
+    categories: []
+};
+
+// GET Transações
 app.get('/api/transactions', async (req, res) => {
     try {
-        // Busca transações no banco (exemplo)
-        const transactions = await prisma.transaction.findMany({
-            take: 10,
-            orderBy: { createdAt: 'desc' }
-        });
-        res.json(transactions);
+        if (prisma) {
+            const transactions = await prisma.transaction.findMany({
+                orderBy: { createdAt: 'desc' },
+                take: 100
+            });
+            res.json({ success: true, data: transactions });
+        } else {
+            res.json({ success: true, data: inMemoryData.transactions });
+        }
     } catch (error) {
         console.error('Erro ao buscar transações:', error);
-        res.status(500).json({ error: 'Erro ao buscar transações' });
-    }
-});
-
-// ============================================
-// Tratamento de Erros
-// ============================================
-
-// Middleware para rotas não encontradas
-app.use((req, res, next) => {
-    res.status(404).json({ 
-        error: 'Rota não encontrada',
-        path: req.path 
-    });
-});
-
-// Middleware de tratamento de erros gerais
-app.use((err, req, res, next) => {
-    console.error('Erro no servidor:', err);
-    res.status(500).json({ 
-        error: 'Erro interno do servidor',
-        message: process.env.NODE_ENV === 'development' ? err.message : 'Erro interno'
-    });
-});
-
-// ============================================
-// Inicialização do Servidor
-// ============================================
-
-// Função para conectar ao banco de dados
-async function connectDatabase() {
-    try {
-        await prisma.$connect();
-        console.log('✅ Conectado ao banco de dados');
-        return true;
-    } catch (error) {
-        console.error('⚠️ Erro ao conectar ao banco:', error.message);
-        console.log('ℹ️ Servidor iniciará sem conexão com banco de dados');
-        return false;
-    }
-}
-
-// Função para iniciar o servidor
-async function startServer() {
-    try {
-        // Tenta conectar ao banco (não bloqueia se falhar)
-        const dbConnected = await connectDatabase();
-        
-        // Inicia o servidor Express
-        app.listen(PORT, '0.0.0.0', () => {
-            console.log('========================================');
-            console.log(`🚀 Servidor rodando na porta ${PORT}`);
-            console.log(`📍 Environment: ${process.env.NODE_ENV || 'development'}`);
-            console.log(`💾 Database: ${dbConnected ? 'Conectado' : 'Não conectado'}`);
-            console.log(`🔗 Health Check: http://localhost:${PORT}/health`);
-            console.log('========================================');
+        res.status(500).json({ 
+            success: false, 
+            error: 'Erro ao buscar transações',
+            details: error.message 
         });
-    } catch (error) {
-        console.error('❌ Erro fatal ao iniciar servidor:', error);
-        process.exit(1);
     }
-}
-
-// Tratamento de sinais para shutdown gracioso
-process.on('SIGTERM', async () => {
-    console.log('📛 SIGTERM recebido, encerrando servidor...');
-    await prisma.$disconnect();
-    process.exit(0);
 });
 
-process.on('SIGINT', async () => {
-    console.log('📛 SIGINT recebido, encerrando servidor...');
-    await prisma.$disconnect();
-    process.exit(0);
+// POST Nova Transação
+app.post('/api/transactions', async (req, res) => {
+    try {
+        const transactionData = req.body;
+        
+        if (prisma) {
+            const transaction = await prisma.transaction.create({
+                data: transactionData
+            });
+            res.status(201).json({ success: true, data: transaction });
+        } else {
+            // Fallback para memória
+            const transaction = {
+                id: Date.now(),
+                ...transactionData,
+                createdAt: new Date().toISOString()
+            };
+            inMemoryData.transactions.push(transaction);
+            res.status(201).json({ success: true, data: transaction });
+        }
+    } catch (error) {
+        console.error('Erro ao criar transação:', error);
+        res.status(500).json({ 
+            success: false, 
+            error: 'Erro ao criar transação',
+            details: error.message 
+        });
+    }
 });
 
-// Inicia o servidor
-startServer();
+// GET Contas
+app.get('/
