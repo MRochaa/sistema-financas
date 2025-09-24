@@ -25,13 +25,14 @@ npx prisma migrate deploy || {
 }
 
 # Inicia o servidor Node.js
+echo "Iniciando servidor Node.js..."
 node src/server.js &
 BACKEND_PID=$!
 
-# Aguarda o backend iniciar (máximo 30 segundos)
+# Aguarda o backend iniciar (máximo 60 segundos)
 echo "Aguardando backend iniciar..."
 WAIT_TIME=0
-MAX_WAIT=30
+MAX_WAIT=60
 
 while [ $WAIT_TIME -lt $MAX_WAIT ]; do
     if check_backend; then
@@ -39,12 +40,14 @@ while [ $WAIT_TIME -lt $MAX_WAIT ]; do
         break
     fi
     echo "Aguardando... ($WAIT_TIME/$MAX_WAIT)"
-    sleep 2
-    WAIT_TIME=$((WAIT_TIME + 2))
+    sleep 3
+    WAIT_TIME=$((WAIT_TIME + 3))
 done
 
 if [ $WAIT_TIME -ge $MAX_WAIT ]; then
     echo "❌ ERRO: Backend não iniciou no tempo esperado"
+    echo "Verificando logs do backend..."
+    ps aux | grep node
     exit 1
 fi
 
@@ -52,6 +55,18 @@ fi
 echo "Iniciando Nginx..."
 nginx -g "daemon off;" &
 NGINX_PID=$!
+
+# Aguarda um pouco para o nginx inicializar
+sleep 2
+
+# Verifica se o nginx está rodando
+if ! kill -0 $NGINX_PID 2>/dev/null; then
+    echo "❌ ERRO: Nginx não iniciou"
+    exit 1
+fi
+
+echo "✅ Nginx iniciado com sucesso!"
+echo "✅ Sistema de Finanças está rodando!"
 
 # Função para tratar sinais de término
 cleanup() {
@@ -78,5 +93,5 @@ while true; do
         cleanup
     fi
     
-    sleep 5
+    sleep 10
 done
