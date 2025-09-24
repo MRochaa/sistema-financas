@@ -1,25 +1,28 @@
 version: '3.8'
 
 services:
-  # Aplicação completa (frontend + backend)
   app:
     build: 
       context: .
       dockerfile: Dockerfile
     container_name: sistema-financas
+    ports:
+      - "3000:3000"  # Porta principal do Nginx
     environment:
-      # Variáveis do backend
+      # Backend
       DATABASE_URL: ${DATABASE_URL}
       JWT_SECRET: ${JWT_SECRET}
+      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-7d}
+      BCRYPT_ROUNDS: ${BCRYPT_ROUNDS:-12}
       NODE_ENV: production
-      PORT: 3001
-      FRONTEND_URL: ${FRONTEND_URL}
-    ports:
-      - "80:80"  # Nginx serve tudo na porta 80
+      BACKEND_PORT: 3001
+      
+      # Frontend (se necessário)
+      VITE_API_URL: /api
     restart: unless-stopped
-    networks:
-      - coolify
-
-networks:
-  coolify:
-    external: true
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
