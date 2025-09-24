@@ -20,6 +20,12 @@ const validateDate = (date: string): boolean => {
   return parsedDate >= minDate && parsedDate <= maxDate;
 };
 
+interface User {
+  id: string;
+  email: string;
+  name: string;
+}
+
 interface Category {
   id: string;
   name: string;
@@ -41,7 +47,7 @@ interface DataContextType {
   categories: Category[];
   transactions: Transaction[];
   loading: boolean;
-  user: any;
+  user: User | null;
   // Category methods
   addCategory: (category: Omit<Category, 'id'>) => void;
   updateCategory: (id: string, category: Omit<Category, 'id'>) => void;
@@ -142,7 +148,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const saved = localStorage.getItem('transactions');
     return saved ? JSON.parse(saved) : initialTransactions;
   });
-  const [loading, setLoading] = useState(false);
+  const [loading] = useState(false);
   const { user } = useAuth();
 
   // Save to localStorage whenever data changes

@@ -19,12 +19,13 @@ Este sistema foi desenvolvido com foco em segurança e está pronto para produç
 ## 🚀 Características
 
 ### Funcionalidades Principais
-- **Autenticação JWT** - Login e registro seguro para até 2 usuários
+- **Autenticação JWT** - Login e registro seguro com validação robusta
 - **Gestão de Transações** - CRUD completo para receitas e despesas
 - **Categorias Personalizáveis** - Criação e gestão de categorias coloridas
 - **Dashboard Interativo** - Visão geral com gráficos e estatísticas
 - **Relatórios e Projeções** - Análise financeira com base nos últimos 3 meses
 - **Design Responsivo** - Interface adaptada para desktop e mobile
+- **Testes Unitários** - Cobertura de testes para frontend e backend
 
 ### Tecnologias
 - **Backend**: Node.js, Express, Prisma ORM, PostgreSQL
@@ -34,12 +35,54 @@ Este sistema foi desenvolvido com foco em segurança e está pronto para produç
 - **Deploy**: Docker e Docker Compose
 - **Proxy**: Nginx para produção
 - **Banco**: PostgreSQL com Prisma ORM
+- **Testes**: Vitest, Testing Library, Supertest
 
 ## 📋 Pré-requisitos
 
 - Node.js 18+ 
 - PostgreSQL 13+
 - Docker e Docker Compose (opcional)
+
+## 🧪 Testes
+
+O projeto inclui testes unitários para frontend e backend:
+
+### Frontend (React)
+```bash
+# Instalar dependências de teste
+npm install
+
+# Executar testes
+npm run test
+
+# Executar testes com interface
+npm run test:ui
+
+# Executar testes com cobertura
+npm run test:coverage
+```
+
+### Backend (Node.js)
+```bash
+# Navegar para o diretório backend
+cd backend
+
+# Instalar dependências de teste
+npm install
+
+# Executar testes
+npm run test
+
+# Executar testes com cobertura
+npm run test:coverage
+```
+
+### Cobertura de Testes
+- ✅ **AuthContext** - Testes de autenticação e validação
+- ✅ **Rotas de Autenticação** - Login, registro e validação
+- ✅ **Rotas de Transações** - CRUD e validação de dados
+- ✅ **Dashboard** - Estatísticas e relatórios
+- ✅ **Validação de Entrada** - Sanitização e validação
 
 ## 🛠️ Instalação e Configuração
 
@@ -77,8 +120,7 @@ npm run db:seed
 
 #### 4. Configure o Frontend
 ```bash
-cd ../frontend
-
+# O frontend está na raiz do projeto
 # Instale as dependências
 npm install
 
@@ -95,8 +137,7 @@ cp .env.example .env
 cd backend
 npm run dev
 
-# Terminal 2 - Frontend
-cd frontend
+# Terminal 2 - Frontend (na raiz do projeto)
 npm run dev
 ```
 
@@ -105,19 +146,23 @@ npm run dev
 #### 1. Clone e execute
 ```bash
 git clone <repository-url>
-cd family-expenses-system
+cd sistema-financas
 
-# Para desenvolvimento
+# Configure as variáveis de ambiente
+cp env.example .env
+# Edite o arquivo .env com suas configurações
+
+# Para desenvolvimento (com banco local)
+docker-compose --profile local-db up -d --build
+
+# Para produção (com banco externo)
 docker-compose up -d --build
-
-# Para produção
-docker-compose -f docker-compose.production.yml up -d --build
 ```
 
 #### 2. Acesse a aplicação
-- **Frontend**: http://localhost:3000
-- **Backend API**: http://localhost:3001
-- **Banco de dados**: localhost:5432
+- **Aplicação completa**: http://localhost:80
+- **API Backend**: http://localhost:80/api
+- **Banco de dados** (se usando local): localhost:5432
 
 ## 🚀 Deploy para Produção (Coolify/Hostinger)
 
@@ -125,24 +170,32 @@ docker-compose -f docker-compose.production.yml up -d --build
 
 1. **Configure as variáveis de ambiente no Coolify**:
 ```env
-# Database
-POSTGRES_DB=financas_lar
-POSTGRES_USER=financas_user
-POSTGRES_PASSWORD=sua_senha_super_segura_aqui
+# Database (fornecido pelo Coolify)
+DATABASE_URL=postgresql://financas_user:financas_senha_123@q8oo8gc4c8c4c0ccs4g800ws:5432/financas_lar_db?schema=public
 
-# Application
-DATABASE_URL=postgresql://financas_user:sua_senha_super_segura_aqui@postgres:5432/financas_lar?schema=public
-JWT_SECRET=sua_chave_jwt_super_segura_de_pelo_menos_32_caracteres
+# JWT (fornecido pelo Coolify)
+JWT_SECRET=d6f48b92f22731e48f7edde5e0fe5127f55dc08c3c12de0d0b74511ab28bee8c
+
+# URLs (fornecido pelo Coolify)
+FRONTEND_URL=https://es4ckok8g0k0sgo0w0o044kk.82.25.65.212.sslip.io
+VITE_API_URL=/api
+
+# Ambiente
 NODE_ENV=production
-FRONTEND_URL=https://seu-dominio.com
+BACKEND_PORT=3001
 
-# Security
+# Variáveis adicionais do Coolify
+FINANCAS_POSTGRES_DB=financas_lar_db
+FINANCAS_POSTGRES_PASSWORD=financas_senha_123
+FINANCAS_POSTGRES_USER=financas_user
+
+# Security (opcional - valores padrão já definidos)
 BCRYPT_ROUNDS=12
 JWT_EXPIRES_IN=7d
 RATE_LIMIT_WINDOW_MS=900000
 RATE_LIMIT_MAX_REQUESTS=100
 
-# Ports
+# Ports (opcional - valores padrão já definidos)
 APP_PORT=3001
 NGINX_PORT=80
 NGINX_SSL_PORT=443
@@ -157,8 +210,8 @@ git push origin main
 
 3. **No Coolify**:
    - Conecte o repositório GitHub
-   - Use o arquivo `docker-compose.production.yml`
-   - Configure as variáveis de ambiente
+   - Use o arquivo `docker-compose.yml`
+   - Configure as variáveis de ambiente (copie de `env.example`)
    - Configure o domínio personalizado
    - Ative HTTPS/SSL
 
@@ -173,20 +226,20 @@ git push origin main
 
 ```bash
 # Ver logs da aplicação
-docker-compose -f docker-compose.production.yml logs -f app
+docker-compose logs -f app
 
-# Backup do banco
-docker-compose -f docker-compose.production.yml exec postgres pg_dump -U financas_user financas_lar > backup.sql
+# Backup do banco (se usando banco local)
+docker-compose exec postgres pg_dump -U postgres financas_lar > backup.sql
 
 # Atualizar aplicação
 git pull origin main
-docker-compose -f docker-compose.production.yml up -d --build
+docker-compose up -d --build
 ```
 
 ## 📱 Como Usar
 
 ### 1. Primeiro Acesso
-1. Acesse http://localhost:3000
+1. Acesse http://localhost:80
 2. Clique em "Criar conta nova"
 3. Cadastre o primeiro usuário (você)
 4. Faça login com as credenciais criadas
@@ -225,15 +278,15 @@ family-expenses-system/
 │   │   └── server.js      # Servidor Express
 │   ├── Dockerfile
 │   └── package.json
-├── frontend/               # App React
-│   ├── src/
-│   │   ├── components/    # Componentes reutilizáveis
-│   │   ├── contexts/      # Context da autenticação
-│   │   ├── pages/         # Páginas da aplicação
-│   │   └── App.tsx        # Componente principal
-│   ├── Dockerfile
-│   ├── nginx.conf         # Configuração do Nginx
-│   └── package.json
+├── src/                   # App React (Frontend)
+│   ├── components/        # Componentes reutilizáveis
+│   ├── contexts/          # Context da autenticação e dados
+│   ├── pages/             # Páginas da aplicação
+│   └── App.tsx            # Componente principal
+├── package.json           # Dependências do frontend
+├── vite.config.ts         # Configuração do Vite
+├── tailwind.config.js     # Configuração do TailwindCSS
+└── tsconfig.json          # Configuração do TypeScript
 ├── docker-compose.yml     # Orquestração dos containers
 └── README.md
 ```

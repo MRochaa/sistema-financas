@@ -12,14 +12,8 @@ if [ -f "package.json" ]; then
     echo "✅ package-lock.json da raiz criado!"
 fi
 
-# Gera para o frontend
-if [ -d "frontend" ] && [ -f "frontend/package.json" ]; then
-    echo "📌 Gerando package-lock.json do frontend..."
-    cd frontend
-    npm install --package-lock-only
-    cd ..
-    echo "✅ package-lock.json do frontend criado!"
-fi
+# Frontend agora está na raiz do projeto
+# O package-lock.json do frontend já é gerado na seção da raiz acima
 
 # Gera para o backend
 if [ -d "backend" ] && [ -f "backend/package.json" ]; then

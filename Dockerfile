@@ -5,19 +5,21 @@ FROM node:20-alpine AS frontend-builder
 
 WORKDIR /app
 
-# Copia arquivos de dependências do frontend
-COPY frontend/package*.json ./frontend/
+# Copia arquivos de dependências do frontend (raiz do projeto)
+COPY package*.json ./
+COPY tsconfig*.json ./
+COPY vite.config.ts ./
+COPY tailwind.config.js ./
+COPY postcss.config.js ./
 
 # Instala TODAS as dependências (incluindo dev) para o build
-WORKDIR /app/frontend
 RUN npm install
 
 # Copia código fonte do frontend
-WORKDIR /app
-COPY frontend/ ./frontend/
+COPY src/ ./src/
+COPY index.html ./
 
 # Executa o build do frontend
-WORKDIR /app/frontend
 RUN npm run build
 
 # ============================================
@@ -67,7 +69,7 @@ RUN mkdir -p /var/log/nginx /var/cache/nginx /var/run/nginx /usr/share/nginx/htm
 COPY --from=backend-builder /app /app/backend
 
 # Copia frontend compilado (apenas os arquivos estáticos gerados)
-COPY --from=frontend-builder /app/frontend/dist /usr/share/nginx/html
+COPY --from=frontend-builder /app/dist /usr/share/nginx/html
 
 # Copia arquivos de configuração
 COPY nginx.conf /etc/nginx/http.d/default.conf

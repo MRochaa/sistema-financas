@@ -10,7 +10,9 @@
     "db:migrate": "prisma migrate dev",
     "db:generate": "prisma generate",
     "db:deploy": "prisma migrate deploy",
-    "db:seed": "node src/seed.js"
+    "db:seed": "node src/seed.js",
+    "test": "vitest",
+    "test:coverage": "vitest --coverage"
   },
   "keywords": ["expense", "family", "budget", "api"],
   "author": "",
@@ -28,6 +30,9 @@
     "dotenv": "^16.3.1"
   },
   "devDependencies": {
-    "nodemon": "^3.0.2"
+    "nodemon": "^3.0.2",
+    "vitest": "^1.6.0",
+    "@vitest/coverage-v8": "^1.6.0",
+    "supertest": "^6.3.4"
   }
 }
