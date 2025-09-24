@@ -1,49 +1,43 @@
 version: '3.8'
 
 services:
+  # Aplicação completa (frontend + backend em um único container)
   app:
-    build:
+    build: 
       context: .
       dockerfile: Dockerfile
+    container_name: sistema-financas
     environment:
-      # Backend
-      NODE_ENV: ${NODE_ENV:-production}
-      BACKEND_PORT: ${BACKEND_PORT:-3001}
+      # Variáveis do backend
       DATABASE_URL: ${DATABASE_URL}
       JWT_SECRET: ${JWT_SECRET}
-      
-      # Frontend (se necessário)
+      NODE_ENV: production
+      BACKEND_PORT: 3001
+      PORT: 3001
+      FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3000}
+      # Variáveis do frontend (já definidas no build)
       VITE_API_URL: ${VITE_API_URL:-/api}
-    
-    # Health check personalizado
+    ports:
+      # IMPORTANTE: Coolify espera a aplicação na porta 3000
+      - "3000:3000"  # Nginx serve tudo na porta 3000
+    restart: unless-stopped
     healthcheck:
+      # Health check simplificado que verifica o endpoint do nginx
       test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
       interval: 30s
       timeout: 10s
       retries: 5
       start_period: 120s
-    
-    # Recursos
+    networks:
+      - coolify
+    # Limites de recursos para evitar problemas de memória
     deploy:
       resources:
         limits:
-          cpus: '1'
-          memory: 512M
+          memory: 1G
         reservations:
-          cpus: '0.25'
-          memory: 128M
-    
-    # Restart policy
-    restart: unless-stopped
-    
-    # Logging
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "10m"
-        max-file: "3"
+          memory: 256M
 
-# Networks (opcional)
 networks:
-  default:
-    driver: bridge
+  coolify:
+    external: true
