@@ -1,39 +1,55 @@
-# Dependências
+# Node modules - MUITO IMPORTANTE
 node_modules/
 */node_modules/
+**/node_modules/
 
 # Logs
 *.log
 npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
 
-# Build anterior
+# Build directories
 dist/
 build/
 */dist/
 */build/
 
-# Ambiente
+# Environment files
 .env
 .env.local
 .env.*.local
 */.env
 
-# IDE
+# IDE files
 .vscode/
 .idea/
 *.swp
 *.swo
 .DS_Store
+Thumbs.db
 
 # Git
 .git/
 .gitignore
 
-# Docker
-Dockerfile
+# Docker files (não copiar para dentro do container)
+Dockerfile*
 docker-compose*.yml
 .dockerignore
 
-# Docs
+# Documentation
 README.md
 *.md
+docs/
+
+# Tests
+**/*.test.js
+**/*.spec.js
+coverage/
+.nyc_output/
+
+# Temporary files
+tmp/
+temp/
+*.tmp
