@@ -81,19 +81,28 @@ app.use('*', (req, res) => {
   res.status(404).json({ error: 'Rota não encontrada' });
 });
 
-// Função para conectar ao banco de dados
-async function connectDatabase() {
+// Função para conectar ao banco de dados com retry
+async function connectDatabase(retryCount = 0) {
+  const maxRetries = 10;
+  const retryDelay = 5000; // 5 segundos
+  
   try {
+    console.log(`Tentativa ${retryCount + 1}/${maxRetries + 1} de conexão com o banco...`);
     await prisma.$connect();
     console.log('✅ Conectado ao banco de dados PostgreSQL');
     return true;
   } catch (error) {
-    console.error('❌ Erro ao conectar ao banco de dados:', error.message);
-    // Em produção, não falha imediatamente - permite que o servidor inicie
-    // O health check vai retornar 503 até a conexão ser estabelecida
-    if (process.env.NODE_ENV === 'production') {
-      console.log('Tentando reconectar em 5 segundos...');
-      setTimeout(connectDatabase, 5000);
+    console.error(`❌ Erro ao conectar ao banco de dados (tentativa ${retryCount + 1}):`, error.message);
+    
+    if (retryCount < maxRetries) {
+      console.log(`Tentando reconectar em ${retryDelay/1000} segundos...`);
+      setTimeout(() => connectDatabase(retryCount + 1), retryDelay);
+    } else {
+      console.error('❌ Máximo de tentativas de conexão com banco atingido');
+      // Em produção, não falha o servidor - apenas retorna 503 no health check
+      if (process.env.NODE_ENV !== 'production') {
+        throw error;
+      }
     }
     return false;
   }

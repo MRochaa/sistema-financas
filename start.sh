@@ -17,9 +17,16 @@ echo "Arquivos no diretório: $(ls -la)"
 
 # Função para verificar se o backend está pronto (não falha em HTTP 503)
 check_backend() {
-    local response=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:${BACKEND_PORT:-3001}/api/health)
+    local response=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:${BACKEND_PORT:-3001}/api/health 2>/dev/null)
     # Aceita 200 (OK) ou 503 (Service Unavailable - banco não conectado ainda)
     [ "$response" = "200" ] || [ "$response" = "503" ]
+    return $?
+}
+
+# Função para verificar se o nginx está respondendo
+check_nginx() {
+    local response=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:3000/health 2>/dev/null)
+    [ "$response" = "200" ]
     return $?
 }
 
@@ -42,9 +49,27 @@ echo "Iniciando Nginx na porta 3000..."
 echo "Verificando se nginx está disponível: $(which nginx)"
 echo "Verificando se nginx.conf existe: $([ -f "/etc/nginx/http.d/default.conf" ] && echo "Sim" || echo "Não")"
 
+# Testa configuração do nginx antes de iniciar
+nginx -t
+if [ $? -ne 0 ]; then
+    echo "❌ Erro na configuração do nginx!"
+    exit 1
+fi
+
 nginx -g "daemon off;" &
 NGINX_PID=$!
 echo "Nginx iniciado com PID: $NGINX_PID"
+
+# Aguarda nginx iniciar e verifica se está respondendo
+echo "Aguardando nginx iniciar..."
+sleep 2
+if check_nginx; then
+    echo "✅ Nginx está respondendo no health check"
+else
+    echo "❌ Nginx não está respondendo no health check"
+    echo "Logs do nginx:"
+    tail -n 20 /var/log/nginx/error.log 2>/dev/null || echo "Não foi possível acessar logs do nginx"
+fi
 
 # Aguarda um momento para os processos iniciarem
 sleep 2
@@ -90,17 +115,29 @@ while [ $WAIT_TIME -lt $MAX_WAIT ]; do
         break
     fi
     echo "Aguardando backend... ($WAIT_TIME/$MAX_WAIT)"
+    # Diagnósticos mais detalhados
+    echo "[diag] Verificando processos Node.js:"
+    ps aux | grep node | grep -v grep || echo "Nenhum processo Node.js encontrado"
+    
     echo "[diag] Tentando curl backend: curl -sv http://localhost:${BACKEND_PORT:-3001}/api/health"
-    curl -sv http://localhost:${BACKEND_PORT:-3001}/api/health || true
+    curl -sv http://localhost:${BACKEND_PORT:-3001}/api/health 2>&1 || true
+    
     echo "[diag] Tentando curl nginx /health: curl -sv http://localhost:3000/health"
-    curl -sv http://localhost:3000/health || true
-    echo "[diag] Processos escutando portas:" && ss -lntp || netstat -lntp || true
-    echo "[diag] Trecho de config do Nginx:" && sed -n '1,120p' /etc/nginx/http.d/default.conf || true
+    curl -sv http://localhost:3000/health 2>&1 || true
+    
+    echo "[diag] Processos escutando portas:"
+    ss -lntp 2>/dev/null || netstat -lntp 2>/dev/null || echo "Não foi possível verificar portas"
     sleep 3
     WAIT_TIME=$((WAIT_TIME + 3))
 done
 if [ $WAIT_TIME -ge $MAX_WAIT ]; then
     echo "⚠️  Aviso: Backend não respondeu dentro do tempo esperado, continuando assim mesmo."
+    echo "Verificando se pelo menos o nginx está funcionando..."
+    if check_nginx; then
+        echo "✅ Pelo menos o nginx está funcionando - container pode continuar"
+    else
+        echo "❌ Nginx também não está funcionando - problema crítico"
+    fi
 fi
 
 # Função para tratar sinais de término

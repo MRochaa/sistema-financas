@@ -13,10 +13,10 @@ const prisma = new PrismaClient();
 // GET /health - Verifica saúde da aplicação
 router.get('/', async (req, res) => {
   try {
-    // Testa conexão com banco de dados com timeout
+    // Testa conexão com banco de dados com timeout mais agressivo
     const dbPromise = prisma.$queryRaw`SELECT 1`;
     const timeoutPromise = new Promise((_, reject) => 
-      setTimeout(() => reject(new Error('Database timeout')), 5000)
+      setTimeout(() => reject(new Error('Database timeout')), 3000)
     );
     
     await Promise.race([dbPromise, timeoutPromise]);
@@ -28,7 +28,8 @@ router.get('/', async (req, res) => {
       timestamp: new Date().toISOString(),
       uptime: process.uptime(),
       environment: process.env.NODE_ENV || 'development',
-      database: 'connected'
+      database: 'connected',
+      port: process.env.BACKEND_PORT || 3001
     });
     
   } catch (error) {
@@ -42,6 +43,7 @@ router.get('/', async (req, res) => {
       uptime: process.uptime(),
       environment: process.env.NODE_ENV || 'development',
       database: 'disconnected',
+      port: process.env.BACKEND_PORT || 3001,
       error: error.message
     });
   }
