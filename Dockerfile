@@ -70,6 +70,8 @@ COPY --from=backend-builder /app /app/backend
 
 # Copia frontend compilado (apenas os arquivos estáticos gerados)
 COPY --from=frontend-builder /app/dist /usr/share/nginx/html
+# Copia favicon se existir
+COPY public/favicon.svg /usr/share/nginx/html/favicon.svg 2>/dev/null || true
 
 # Copia arquivos de configuração
 COPY nginx.conf /etc/nginx/http.d/default.conf

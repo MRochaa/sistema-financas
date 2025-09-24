@@ -5,16 +5,17 @@
 
 echo "=== Iniciando Sistema de Finanças ==="
 echo "Ambiente: $NODE_ENV"
-echo "Porta Backend: $PORT"
+echo "Porta Backend: ${PORT:-3001}"
 
 # Função para verificar se o backend está pronto
 check_backend() {
-    curl -s http://localhost:${PORT}/api/health > /dev/null 2>&1
+    local backend_port=${PORT:-3001}
+    curl -s http://localhost:${backend_port}/api/health > /dev/null 2>&1
     return $?
 }
 
 # Inicia o backend em background
-echo "Iniciando backend na porta ${PORT}..."
+echo "Iniciando backend na porta ${PORT:-3001}..."
 cd /app/backend
 
 # Executa migrações do Prisma se necessário
