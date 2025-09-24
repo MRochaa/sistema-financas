@@ -83,10 +83,6 @@ app.use((err, req, res, next) => {
   });
 });
 
-// Rota 404 para requisições não encontradas
-app.use('*', (req, res) => {
-  res.status(404).json({ error: 'Rota não encontrada' });
-});
 
 // Função para conectar ao banco de dados
 async function connectDatabase() {
@@ -112,6 +108,11 @@ async function startServer() {
   
   // Carrega as rotas
   await loadRoutes();
+  
+  // Rota 404 para requisições não encontradas (DEVE vir depois das rotas da API)
+  app.use('*', (req, res) => {
+    res.status(404).json({ error: 'Rota não encontrada' });
+  });
   
   // Inicia o servidor Express
   app.listen(PORT, '0.0.0.0', () => {
