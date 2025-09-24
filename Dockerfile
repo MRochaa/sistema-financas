@@ -28,10 +28,12 @@ RUN VITE_API_URL=${VITE_API_URL} npm run build
 FROM node:20-alpine AS backend-builder
 
 # Instala dependências do sistema necessárias para Prisma
-# Usa script robusto com retry logic para evitar travamentos
-COPY build-scripts/install-deps.sh /tmp/install-deps.sh
-RUN chmod +x /tmp/install-deps.sh && \
-    /tmp/install-deps.sh
+# Otimizado com timeout e retry para evitar travamentos
+RUN apk update --no-cache && \
+    apk add --no-cache --timeout=300 \
+    openssl \
+    libc6-compat \
+    && rm -rf /var/cache/apk/* /tmp/*
 
 WORKDIR /app
 
@@ -56,12 +58,15 @@ RUN npm prune --production
 FROM node:20-alpine
 
 # Instala nginx, openssl e ferramentas necessárias
-# Usa script robusto com retry logic para evitar travamentos
-COPY build-scripts/install-deps.sh /tmp/install-deps.sh
-RUN chmod +x /tmp/install-deps.sh && \
-    /tmp/install-deps.sh && \
-    timeout 300 apk add --no-cache nginx bash curl && \
-    rm -rf /var/cache/apk/* /tmp/* /var/tmp/*
+# Otimizado com timeout e limpeza para evitar travamentos
+RUN apk update --no-cache && \
+    apk add --no-cache --timeout=300 \
+    nginx \
+    bash \
+    curl \
+    openssl \
+    libc6-compat \
+    && rm -rf /var/cache/apk/* /tmp/* /var/tmp/*
 
 # Cria diretórios necessários com permissões corretas
 RUN mkdir -p /var/log/nginx /var/cache/nginx /var/run/nginx /usr/share/nginx/html \
