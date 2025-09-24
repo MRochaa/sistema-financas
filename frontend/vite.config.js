@@ -1,39 +1,36 @@
-import { defineConfig } from 'vite';
-import react from '@vitejs/plugin-react';
-import path from 'path';
+import { defineConfig } from 'vite'
+import react from '@vitejs/plugin-react'
 
-// https://vitejs.dev/config/
+// Configuração do Vite para build de produção
 export default defineConfig({
   plugins: [react()],
-  base: '/',
-  resolve: {
-    alias: {
-      '@': path.resolve(__dirname, './src'),
-    },
-  },
   server: {
-    host: true,
     port: 5173,
     proxy: {
       '/api': {
         target: 'http://localhost:3001',
         changeOrigin: true,
-      },
-    },
+      }
+    }
   },
   build: {
+    // Gera arquivos otimizados para produção
     outDir: 'dist',
-    assetsDir: 'assets',
     sourcemap: false,
-    // Importante: garante que o CSS seja extraído
-    cssCodeSplit: false,
+    minify: 'terser',
+    chunkSizeWarningLimit: 1000,
     rollupOptions: {
       output: {
-        manualChunks: undefined,
-      },
-    },
+        manualChunks: {
+          vendor: ['react', 'react-dom', 'react-router-dom'],
+          charts: ['recharts'],
+          utils: ['axios', 'lucide-react']
+        }
+      }
+    }
   },
-  css: {
-    postcss: './postcss.config.js',
-  },
-});
+  define: {
+    // Define a URL da API baseada em variável de ambiente
+    'import.meta.env.VITE_API_URL': JSON.stringify(process.env.VITE_API_URL || '/api')
+  }
+})
