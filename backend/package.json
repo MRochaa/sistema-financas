@@ -1,33 +1,31 @@
 {
-  "name": "family-expenses-backend",
+  "name": "sistema-financas-backend",
   "version": "1.0.0",
-  "description": "Backend API for family expense control system",
+  "description": "Backend do Sistema de Finanças",
   "main": "src/server.js",
   "type": "module",
   "scripts": {
     "start": "node src/server.js",
     "dev": "node --watch src/server.js",
-    "db:migrate": "prisma migrate dev",
-    "db:generate": "prisma generate",
-    "db:deploy": "prisma migrate deploy",
-    "db:seed": "node src/seed.js"
+    "prisma:generate": "prisma generate",
+    "prisma:migrate": "prisma migrate deploy"
   },
-  "keywords": ["expense", "family", "budget", "api"],
-  "author": "",
-  "license": "MIT",
   "dependencies": {
     "express": "^4.18.2",
     "cors": "^2.8.5",
-    "helmet": "^7.1.0",
-    "express-rate-limit": "^7.1.5",
+    "dotenv": "^16.3.1",
     "bcryptjs": "^2.4.3",
     "jsonwebtoken": "^9.0.2",
-    "prisma": "^5.7.0",
-    "@prisma/client": "^5.7.0",
-    "zod": "^3.22.4",
-    "dotenv": "^16.3.1"
+    "@prisma/client": "^5.22.0",
+    "express-rate-limit": "^7.1.5",
+    "helmet": "^7.1.0",
+    "zod": "^3.22.4"
   },
   "devDependencies": {
+    "prisma": "^5.22.0",
     "nodemon": "^3.0.2"
+  },
+  "engines": {
+    "node": ">=18.0.0"
   }
 }
