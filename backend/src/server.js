@@ -1,5 +1,5 @@
-// Servidor principal da aplicação
-// Gerencia a inicialização do Express e conexão com banco de dados
+// Servidor principal - Sistema de Finanças
+// Compatível com todas as funcionalidades do frontend
 
 import express from 'express';
 import cors from 'cors';
@@ -11,17 +11,12 @@ dotenv.config();
 
 // Inicializa Express e Prisma
 const app = express();
-const prisma = new PrismaClient({
-  // Configurações para melhor logging em produção
-  log: process.env.NODE_ENV === 'production' 
-    ? ['error', 'warn'] 
-    : ['query', 'info', 'warn', 'error'],
-});
+const prisma = new PrismaClient();
 
-// Porta do servidor (interno) – usa BACKEND_PORT para evitar conflito com Nginx
+// Porta do backend (diferente do Nginx que roda na 3000)
 const PORT = process.env.BACKEND_PORT || 3001;
 
-// Middlewares globais
+// Middlewares
 app.use(cors({
   origin: process.env.FRONTEND_URL || '*',
   credentials: true
@@ -29,44 +24,52 @@ app.use(cors({
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Middleware de logging simples
+// Middleware de logging
 app.use((req, res, next) => {
   console.log(`[${new Date().toISOString()}] ${req.method} ${req.path}`);
   next();
 });
 
-// Rota de health check IMPORTANTE para o Docker
+// ============================================
+// Rotas de Health Check
+// ============================================
 app.get('/api/health', (req, res) => {
   res.status(200).json({ 
     status: 'healthy',
     timestamp: new Date().toISOString(),
-    environment: process.env.NODE_ENV
-  });
-});
-
-// Rota de teste da API
-app.get('/api', (req, res) => {
-  res.json({ 
-    message: 'API do Sistema de Finanças funcionando!',
+    environment: process.env.NODE_ENV,
     version: '1.0.0'
   });
 });
 
-// Importa e usa as rotas da aplicação
+// ============================================
+// Importa as rotas existentes
+// ============================================
 import authRoutes from './routes/auth.js';
 import transactionsRoutes from './routes/transactions.js';
 import categoriesRoutes from './routes/categories.js';
 import dashboardRoutes from './routes/dashboard.js';
-import healthRoutes from './routes/health.js';
 
-// Registra as rotas existentes
-app.use('/api/health', healthRoutes); // mantém rota de health prefixada
+// Registra as rotas da API
 app.use('/api/auth', authRoutes);
 app.use('/api/transactions', transactionsRoutes);
 app.use('/api/categories', categoriesRoutes);
 app.use('/api/dashboard', dashboardRoutes);
 
-// Middleware de tratamento de erros global
+// ============================================
+// Rotas para funcionalidades extras do frontend
+// (Estas salvam no localStorage do frontend)
+// ============================================
+
+// Rota genérica para dados salvos localmente
+app.get('/api/local-storage/:key', (req, res) => {
+  // Retorna vazio - dados gerenciados pelo frontend
+  res.json({ message: 'Dados gerenciados localmente no navegador' });
+});
+
+// ============================================
+// Middleware de tratamento de erros
+// ============================================
 app.use((err, req, res, next) => {
   console.error('Erro:', err);
   res.status(err.status || 500).json({
@@ -76,113 +79,38 @@ app.use((err, req, res, next) => {
   });
 });
 
-// Rota 404 para requisições não encontradas
-app.use('*', (req, res) => {
+// ============================================
+// Rota 404 para rotas não encontradas
+// ============================================
+app.use('/api/*', (req, res) => {
   res.status(404).json({ error: 'Rota não encontrada' });
 });
 
-// Função para conectar ao banco de dados com retry
-async function connectDatabase(retryCount = 0) {
-  const maxRetries = 10;
-  const retryDelay = 5000; // 5 segundos
-  
-  try {
-    console.log(`Tentativa ${retryCount + 1}/${maxRetries + 1} de conexão com o banco...`);
-    await prisma.$connect();
-    console.log('✅ Conectado ao banco de dados PostgreSQL');
-    return true;
-  } catch (error) {
-    console.error(`❌ Erro ao conectar ao banco de dados (tentativa ${retryCount + 1}):`, error.message);
-    
-    if (retryCount < maxRetries) {
-      console.log(`Tentando reconectar em ${retryDelay/1000} segundos...`);
-      setTimeout(() => connectDatabase(retryCount + 1), retryDelay);
-    } else {
-      console.error('❌ Máximo de tentativas de conexão com banco atingido');
-      // Em produção, não falha o servidor - apenas retorna 503 no health check
-      if (process.env.NODE_ENV !== 'production') {
-        throw error;
-      }
-    }
-    return false;
-  }
-}
+// ============================================
+// Inicialização do servidor
+// ============================================
+const server = app.listen(PORT, '0.0.0.0', () => {
+  console.log('========================================');
+  console.log('🚀 SERVIDOR BACKEND INICIADO!');
+  console.log(`📍 Porta: ${PORT}`);
+  console.log(`🌍 Ambiente: ${process.env.NODE_ENV}`);
+  console.log(`❤️ Health: http://localhost:${PORT}/api/health`);
+  console.log('========================================');
+});
 
-// Inicializa o servidor
-async function startServer() {
-  // Tenta conectar ao banco de dados (não bloqueia a inicialização)
-  connectDatabase();
-  
-  // Inicia o servidor Express
-  const server = app.listen(PORT, '0.0.0.0', () => {
-    console.log('========================================');
-    console.log(`🚀 Servidor rodando na porta ${PORT}`);
-    console.log(`📊 Ambiente: ${process.env.NODE_ENV}`);
-    console.log(`🔗 API disponível em http://localhost:${PORT}/api`);
-    console.log('========================================');
+// Shutdown gracioso
+process.on('SIGTERM', () => {
+  console.log('SIGTERM recebido, encerrando...');
+  server.close(() => {
+    prisma.$disconnect();
+    process.exit(0);
   });
+});
 
-  // Tratamento de erros do servidor
-  server.on('error', (error) => {
-    if (error.code === 'EADDRINUSE') {
-      console.error(`❌ Porta ${PORT} já está em uso`);
-    } else {
-      console.error('❌ Erro no servidor:', error);
-    }
-    // Não sair imediatamente em produção
-    if (process.env.NODE_ENV !== 'production') {
-      process.exit(1);
-    }
+process.on('SIGINT', () => {
+  console.log('SIGINT recebido, encerrando...');
+  server.close(() => {
+    prisma.$disconnect();
+    process.exit(0);
   });
-}
-
-// Tratamento de erros não capturados
-process.on('uncaughtException', (error) => {
-  console.error('❌ Erro não capturado:', error);
-  // Em produção, não sair imediatamente
-  if (process.env.NODE_ENV !== 'production') {
-    process.exit(1);
-  }
 });
-
-process.on('unhandledRejection', (reason, promise) => {
-  console.error('❌ Promise rejeitada não tratada:', reason);
-  // Em produção, não sair imediatamente
-  if (process.env.NODE_ENV !== 'production') {
-    process.exit(1);
-  }
-});
-
-// Tratamento de sinais para shutdown gracioso
-process.on('SIGTERM', async () => {
-  console.log('SIGTERM recebido, encerrando servidor...');
-  await prisma.$disconnect();
-  process.exit(0);
-});
-
-process.on('SIGINT', async () => {
-  console.log('SIGINT recebido, encerrando servidor...');
-  await prisma.$disconnect();
-  process.exit(0);
-});
-
-// Inicia o servidor
-startServer().catch(error => {
-  console.error('Erro fatal ao iniciar servidor:', error);
-  // Em produção, não sair imediatamente - tentar reconectar
-  if (process.env.NODE_ENV === 'production') {
-    console.log('Tentando reiniciar em 10 segundos...');
-    setTimeout(() => {
-      startServer().catch(err => {
-        console.error('Falha ao reiniciar servidor:', err);
-        // Só sair após múltiplas tentativas
-        process.exit(1);
-      });
-    }, 10000);
-  } else {
-    process.exit(1);
-  }
-});
-
-// Exporta app e prisma para uso em outros módulos
-export { app, prisma };
