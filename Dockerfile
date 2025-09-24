@@ -5,91 +5,77 @@ FROM node:20-alpine AS frontend-builder
 
 WORKDIR /app
 
-# Copia arquivos de dependências
-COPY frontend/package*.json ./frontend/
-
-# Instala dependências incluindo devDependencies para build
-WORKDIR /app/frontend
+# Copia os arquivos do frontend
+COPY frontend/package*.json ./
 RUN npm install
 
-# Copia todos os arquivos do frontend
-WORKDIR /app
-COPY frontend/ ./frontend/
+# Copia todo o código do frontend
+COPY frontend/ ./
 
-# Build do frontend (Vite + Tailwind)
-WORKDIR /app/frontend
-ARG VITE_API_URL=/api
-ENV VITE_API_URL=${VITE_API_URL}
-
-# Build com verbose para debug
-RUN echo "Building frontend with VITE_API_URL=${VITE_API_URL}" && \
-    npm run build && \
-    echo "Build complete. Checking dist folder:" && \
-    ls -la dist/ && \
-    ls -la dist/assets/ || echo "No assets folder"
+# Build do frontend para produção
+RUN npm run build
 
 # ============================================
-# ESTÁGIO 2: Build do Backend
+# ESTÁGIO 2: Build do Backend  
 # ============================================
 FROM node:20-alpine AS backend-builder
 
-RUN apk add --no-cache openssl libc6-compat
-
 WORKDIR /app
 
+# Copia arquivos do backend
 COPY backend/package*.json ./
-RUN npm ci || npm install
+RUN npm install
 
+# Copia o código do backend
 COPY backend/ ./
-RUN npx prisma generate
-RUN npm prune --production
+
+# Gera o Prisma Client se existir
+RUN if [ -f prisma/schema.prisma ]; then npx prisma generate; fi
 
 # ============================================
-# ESTÁGIO 3: Imagem Final
+# ESTÁGIO 3: Imagem Final de Produção
 # ============================================
 FROM node:20-alpine
 
-# Instala nginx e ferramentas
+# Instala nginx e ferramentas necessárias
 RUN apk add --no-cache \
     nginx \
-    bash \
     curl \
-    openssl \
-    libc6-compat
+    bash
 
-# Cria diretórios
+# Cria diretórios necessários
 RUN mkdir -p \
+    /usr/share/nginx/html \
     /var/log/nginx \
     /var/cache/nginx \
-    /var/run/nginx \
-    /usr/share/nginx/html \
-    /etc/nginx/http.d
+    /run/nginx
 
-# Copia backend
+# Copia o frontend buildado
+COPY --from=frontend-builder /app/dist /usr/share/nginx/html
+
+# Copia o backend
 COPY --from=backend-builder /app /app/backend
 
-# Copia frontend BUILD (importante: toda a pasta dist)
-COPY --from=frontend-builder /app/frontend/dist /usr/share/nginx/html
-
-# Lista conteúdo para debug
-RUN echo "Frontend files:" && \
-    ls -la /usr/share/nginx/html/ && \
-    echo "Assets:" && \
-    ls -la /usr/share/nginx/html/assets/ || echo "No assets"
-
-# Copia configurações
+# Copia as configurações
 COPY nginx.conf /etc/nginx/http.d/default.conf
 COPY start.sh /start.sh
 
+# Dá permissão de execução ao script
 RUN chmod +x /start.sh
 
+# Define o diretório de trabalho
 WORKDIR /app/backend
 
+# Variáveis de ambiente
 ENV NODE_ENV=production
+ENV BACKEND_PORT=3001
 
+# Expõe a porta principal (Nginx)
 EXPOSE 3000
 
-HEALTHCHECK --interval=30s --timeout=10s --start-period=120s --retries=5 \
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
     CMD curl -f http://localhost:3000/health || exit 1
 
-CMD ["/bin/bash", "/start.sh"]
+# Comando de inicialização
+CMD ["/start.sh"]
