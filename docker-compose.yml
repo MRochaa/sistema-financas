@@ -2,23 +2,18 @@ version: '3.8'
 
 services:
   app:
-    build: 
-      context: .
-      dockerfile: Dockerfile
+    image: sistema-financas:latest
     container_name: sistema-financas
     ports:
-      - "3000:3000"  # Porta principal do Nginx
+      - "${PORT:-3000}:3000"
     environment:
-      # Backend - Variáveis essenciais
       DATABASE_URL: ${DATABASE_URL}
       JWT_SECRET: ${JWT_SECRET}
       JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-7d}
       BCRYPT_ROUNDS: ${BCRYPT_ROUNDS:-12}
       NODE_ENV: production
       BACKEND_PORT: 3001
-      FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3000}
-      
-      # Frontend
+      FRONTEND_URL: ${FRONTEND_URL}
       VITE_API_URL: /api
     restart: unless-stopped
     healthcheck:
@@ -27,9 +22,3 @@ services:
       timeout: 10s
       retries: 3
       start_period: 60s
-    networks:
-      - app-network
-
-networks:
-  app-network:
-    driver: bridge
