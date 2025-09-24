@@ -51,6 +51,10 @@ if [ $WAIT_TIME -ge $MAX_WAIT ]; then
     exit 1
 fi
 
+# Substitui variáveis de ambiente no nginx.conf
+echo "Configurando Nginx para porta ${PORT:-3001}..."
+sed -i "s/\${PORT:-3001}/${PORT:-3001}/g" /etc/nginx/http.d/default.conf
+
 # Inicia o Nginx em foreground
 echo "Iniciando Nginx..."
 nginx -g "daemon off;" &

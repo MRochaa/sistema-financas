@@ -42,7 +42,7 @@ services:
       # Backend
       JWT_SECRET: ${JWT_SECRET}
       NODE_ENV: ${NODE_ENV:-production}
-      PORT: ${PORT:-3001}
+      PORT: ${BACKEND_PORT:-3001}
       FRONTEND_URL: ${FRONTEND_URL}
       
       # Security
