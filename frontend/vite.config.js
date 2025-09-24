@@ -1,7 +1,7 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 
-// Configuração do Vite para build de produção
+// https://vitejs.dev/config/
 export default defineConfig({
   plugins: [react()],
   server: {
@@ -14,23 +14,9 @@ export default defineConfig({
     }
   },
   build: {
-    // Gera arquivos otimizados para produção
     outDir: 'dist',
     sourcemap: false,
-    minify: 'terser',
-    chunkSizeWarningLimit: 1000,
-    rollupOptions: {
-      output: {
-        manualChunks: {
-          vendor: ['react', 'react-dom', 'react-router-dom'],
-          charts: ['recharts'],
-          utils: ['axios', 'lucide-react']
-        }
-      }
-    }
-  },
-  define: {
-    // Define a URL da API baseada em variável de ambiente
-    'import.meta.env.VITE_API_URL': JSON.stringify(process.env.VITE_API_URL || '/api')
+    // Remove a configuração do terser, deixa o Vite usar o padrão
+    chunkSizeWarningLimit: 1000
   }
 })
