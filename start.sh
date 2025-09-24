@@ -54,7 +54,10 @@ fi
 # Substitui variáveis de ambiente no nginx.conf
 echo "Configurando Nginx para porta ${PORT:-3001}..."
 ACTUAL_PORT=${PORT:-3001}
+echo "Substituindo \${PORT:-3001} por ${ACTUAL_PORT} no nginx.conf..."
 sed -i "s/\${PORT:-3001}/${ACTUAL_PORT}/g" /etc/nginx/http.d/default.conf
+echo "Verificando configuração do nginx após substituição:"
+grep -n "proxy_pass" /etc/nginx/http.d/default.conf || echo "Nenhum proxy_pass encontrado"
 
 # Inicia o Nginx em foreground
 echo "Iniciando Nginx..."
