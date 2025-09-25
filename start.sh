@@ -105,14 +105,12 @@ if [ ! -f "/etc/nginx/http.d/default.conf" ]; then
 fi
 echo "✅ nginx.conf encontrado"
 
-# Substitui variáveis de ambiente no nginx.conf
-echo "Configurando Nginx para porta ${PORT:-3001}..."
-ACTUAL_PORT=${PORT:-3001}
-echo "Substituindo \${PORT:-3001} por ${ACTUAL_PORT} no nginx.conf..."
-sed -i "s/\${PORT:-3001}/${ACTUAL_PORT}/g" /etc/nginx/http.d/default.conf
+# Configuração do nginx (sem substituição de variáveis)
+echo "Configurando Nginx para porta 3001 (valor fixo)..."
+echo "NOTA: nginx.conf usa valor fixo 3001 - sem substituição de variáveis"
 
-# Verificar se a substituição funcionou
-echo "Verificando substituição:"
+# Verificar configuração do nginx
+echo "Verificando configuração do nginx:"
 grep -n "proxy_pass" /etc/nginx/http.d/default.conf || echo "Nenhum proxy_pass encontrado"
 
 # Testa a configuração do nginx
