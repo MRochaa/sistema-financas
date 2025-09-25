@@ -79,6 +79,7 @@ RUN echo "Verificando arquivos do frontend copiados:" && \
         exit 1; \
     fi && \
     echo "✅ Frontend copiado com sucesso!"
+
 # Copia arquivos públicos (favicon, etc.)
 COPY public/ /tmp/public/
 RUN if [ -f /tmp/public/favicon.svg ]; then cp /tmp/public/favicon.svg /usr/share/nginx/html/favicon.svg; fi
@@ -102,7 +103,7 @@ EXPOSE 80
 
 # Health check que verifica se nginx está respondendo
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
-    CMD curl -f http://localhost/health || exit 1
+    CMD curl -f http://127.0.0.1/health || exit 1
 
 # Comando de inicialização
 CMD ["/start.sh"]
