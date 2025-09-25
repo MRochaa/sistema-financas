@@ -77,9 +77,16 @@ RUN if [ -f /tmp/public/favicon.svg ]; then cp /tmp/public/favicon.svg /usr/shar
 # Copia arquivos de configuração
 COPY nginx.conf /etc/nginx/http.d/default.conf
 COPY start.sh /start.sh
+COPY debug.sh /debug.sh
 
-# Ajusta permissões do script
-RUN chmod +x /start.sh
+# Ajusta permissões dos scripts
+RUN chmod +x /start.sh /debug.sh
+
+# Debug - verificar estrutura após build
+RUN echo "Verificando estrutura após build:" && \
+    ls -la /app/backend/ && \
+    ls -la /usr/share/nginx/html/ && \
+    ls -la /etc/nginx/http.d/
 
 # Define diretório de trabalho
 WORKDIR /app/backend
@@ -96,4 +103,7 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
     CMD curl -f http://localhost/health || exit 1
 
 # Comando de inicialização
+# TEMPORÁRIO: Use debug.sh para debug
+# CMD ["/debug.sh"]
+# Depois volte para:
 CMD ["/start.sh"]
