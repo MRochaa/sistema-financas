@@ -59,6 +59,10 @@ ACTUAL_PORT=${PORT:-3001}
 echo "Substituindo \${PORT:-3001} por ${ACTUAL_PORT} no nginx.conf..."
 sed -i "s/\${PORT:-3001}/${ACTUAL_PORT}/g" /etc/nginx/http.d/default.conf
 
+# Verifica se a substituição funcionou
+echo "Verificando substituição no nginx.conf..."
+grep -n "proxy_pass" /etc/nginx/http.d/default.conf
+
 # Verifica se os arquivos do frontend existem
 echo "Verificando arquivos do frontend..."
 if [ ! -f /usr/share/nginx/html/index.html ]; then
