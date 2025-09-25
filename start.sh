@@ -59,6 +59,18 @@ ACTUAL_PORT=${PORT:-3001}
 echo "Substituindo \${PORT:-3001} por ${ACTUAL_PORT} no nginx.conf..."
 sed -i "s/\${PORT:-3001}/${ACTUAL_PORT}/g" /etc/nginx/http.d/default.conf
 
+# Verifica se os arquivos do frontend existem
+echo "Verificando arquivos do frontend..."
+if [ ! -f /usr/share/nginx/html/index.html ]; then
+    echo "❌ ERRO: index.html não encontrado em /usr/share/nginx/html/"
+    echo "Listando conteúdo de /usr/share/nginx/html/:"
+    ls -la /usr/share/nginx/html/
+    exit 1
+fi
+
+echo "✅ Arquivos do frontend encontrados:"
+ls -la /usr/share/nginx/html/
+
 # Testa a configuração do nginx
 echo "Testando configuração do nginx..."
 nginx -t || {

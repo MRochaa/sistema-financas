@@ -70,6 +70,15 @@ COPY --from=backend-builder /app /app/backend
 
 # Copia frontend compilado (apenas os arquivos estáticos gerados)
 COPY --from=frontend-builder /app/dist /usr/share/nginx/html
+
+# Verifica se os arquivos foram copiados corretamente
+RUN echo "Verificando arquivos do frontend copiados:" && \
+    ls -la /usr/share/nginx/html/ && \
+    if [ ! -f /usr/share/nginx/html/index.html ]; then \
+        echo "❌ ERRO: index.html não foi copiado!"; \
+        exit 1; \
+    fi && \
+    echo "✅ Frontend copiado com sucesso!"
 # Copia arquivos públicos (favicon, etc.)
 COPY public/ /tmp/public/
 RUN if [ -f /tmp/public/favicon.svg ]; then cp /tmp/public/favicon.svg /usr/share/nginx/html/favicon.svg; fi
