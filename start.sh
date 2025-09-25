@@ -53,6 +53,19 @@ if [ $WAIT_TIME -ge $MAX_WAIT ]; then
     exit 1
 fi
 
+# Substitui variáveis de ambiente no nginx.conf
+echo "Configurando Nginx para porta ${PORT:-3001}..."
+ACTUAL_PORT=${PORT:-3001}
+echo "Substituindo \${PORT:-3001} por ${ACTUAL_PORT} no nginx.conf..."
+sed -i "s/\${PORT:-3001}/${ACTUAL_PORT}/g" /etc/nginx/http.d/default.conf
+
+# Testa a configuração do nginx
+echo "Testando configuração do nginx..."
+nginx -t || {
+    echo "❌ ERRO: Configuração do nginx inválida"
+    exit 1
+}
+
 # Inicia o Nginx em foreground
 echo "Iniciando Nginx..."
 echo "✅ Sistema de Finanças está rodando!"
