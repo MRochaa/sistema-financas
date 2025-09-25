@@ -12,7 +12,7 @@ echo "Porta Backend: ${PORT:-3001}"
 # Função para verificar se o backend está pronto
 check_backend() {
     local backend_port=${PORT:-3001}
-    curl -s http://localhost:${backend_port}/api/health > /dev/null 2>&1
+    curl -s http://127.0.0.1:${backend_port}/api/health > /dev/null 2>&1
     return $?
 }
 
