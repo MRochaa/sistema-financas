@@ -21,6 +21,12 @@ const prisma = new PrismaClient({
 // Porta do servidor
 const PORT = process.env.PORT || 3001;
 
+// Log inicial para debug
+console.log('🚀 Iniciando servidor...');
+console.log('📊 Ambiente:', process.env.NODE_ENV);
+console.log('🔌 Porta configurada:', PORT);
+console.log('🗄️ DATABASE_URL:', process.env.DATABASE_URL ? 'Configurada' : 'NÃO CONFIGURADA');
+
 // Middlewares globais
 app.use(cors({
   origin: process.env.FRONTEND_URL || '*',
@@ -37,10 +43,12 @@ app.use((req, res, next) => {
 
 // Rota de health check IMPORTANTE para o Docker
 app.get('/api/health', (req, res) => {
+  console.log('[HEALTH CHECK] Requisição recebida');
   res.status(200).json({ 
     status: 'healthy',
     timestamp: new Date().toISOString(),
-    environment: process.env.NODE_ENV
+    environment: process.env.NODE_ENV,
+    port: PORT
   });
 });
 
@@ -118,12 +126,23 @@ async function startServer() {
   // Inicia o servidor Express
   app.listen(PORT, '0.0.0.0', () => {
     console.log('========================================');
-    console.log(`🚀 Servidor rodando na porta ${PORT}`);
+    console.log(`✅ Servidor rodando na porta ${PORT}`);
     console.log(`📊 Ambiente: ${process.env.NODE_ENV}`);
-    console.log(`🔗 API disponível em http://localhost:${PORT}/api`);
+    console.log(`🔗 API disponível em http://0.0.0.0:${PORT}/api`);
     console.log('========================================');
   });
 }
+
+// Tratamento de erros não capturados
+process.on('uncaughtException', (err) => {
+  console.error('❌ Erro não capturado:', err);
+  process.exit(1);
+});
+
+process.on('unhandledRejection', (err) => {
+  console.error('❌ Promise rejeitada:', err);
+  process.exit(1);
+});
 
 // Tratamento de sinais para shutdown gracioso
 process.on('SIGTERM', async () => {

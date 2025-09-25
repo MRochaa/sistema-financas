@@ -79,9 +79,10 @@ COPY nginx.conf /etc/nginx/http.d/default.conf
 COPY start.sh /start.sh
 COPY debug.sh /debug.sh
 COPY teste-nginx.sh /teste-nginx.sh
+COPY debug-backend.sh /debug-backend.sh
 
 # Ajusta permissões dos scripts
-RUN chmod +x /start.sh /debug.sh /teste-nginx.sh
+RUN chmod +x /start.sh /debug.sh /teste-nginx.sh /debug-backend.sh
 
 # Debug - verificar estrutura após build
 RUN echo "Verificando estrutura após build:" && \
@@ -104,7 +105,7 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
     CMD curl -f http://localhost/health || exit 1
 
 # Comando de inicialização
-# TEMPORÁRIO: Use teste-nginx.sh para debug
-# CMD ["/teste-nginx.sh"]
+# TEMPORÁRIO: Use debug-backend.sh para debug
+# CMD ["/debug-backend.sh"]
 # Depois volte para:
 CMD ["/start.sh"]
