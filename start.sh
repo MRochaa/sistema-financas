@@ -1,93 +1,113 @@
 #!/bin/bash
-
-# Script de inicialização do container
-# Gerencia o startup do backend Node.js e frontend Nginx
-
 set -e
 
-echo "=== Iniciando Sistema de Finanças ==="
-echo "Ambiente: $NODE_ENV"
-echo "Porta Backend: ${PORT:-3001}"
+echo "========================================="
+echo "🚀 INICIANDO SISTEMA DE FINANÇAS"
+echo "========================================="
+echo "📅 Data: $(date)"
+echo "🌍 Ambiente: ${NODE_ENV:-production}"
+echo "🔌 Porta Backend: 3001 (FIXA)"
+echo "🌐 Porta Nginx: 80"
+echo "========================================="
 
 # Função para verificar se o backend está pronto
 check_backend() {
-    local backend_port=${PORT:-3001}
-    curl -s http://127.0.0.1:${backend_port}/api/health > /dev/null 2>&1
+    curl -sf http://127.0.0.1:3001/api/health > /dev/null 2>&1
     return $?
 }
 
-# Inicia o backend em background
-echo "Iniciando backend na porta ${PORT:-3001}..."
+# Configuração do backend
 cd /app/backend
 
-# Executa migrações do Prisma se necessário
-echo "Verificando migrações do banco de dados..."
-npx prisma migrate deploy || {
-    echo "Aviso: Não foi possível executar migrações. Continuando..."
-}
+# Verifica conexão com banco
+echo "🔍 Verificando conexão com banco de dados..."
+if npx prisma db execute --stdin <<< "SELECT 1" > /dev/null 2>&1; then
+    echo "✅ Banco de dados conectado!"
+else
+    echo "⚠️  Aviso: Não foi possível conectar ao banco"
+fi
 
-# Inicia o servidor Node.js
-echo "Iniciando servidor Node.js..."
-node src/server.js &
+# Executa migrações
+echo "📦 Executando migrações do banco..."
+if npx prisma migrate deploy; then
+    echo "✅ Migrações aplicadas com sucesso!"
+else
+    echo "⚠️  Migrações já aplicadas ou erro não crítico"
+fi
+
+# Executa seed se necessário
+if [ "$RUN_SEED" = "true" ] || [ ! -f "/app/backend/.seeded" ]; then
+    echo "🌱 Executando seed do banco..."
+    if node src/seed.js; then
+        touch /app/backend/.seeded
+        echo "✅ Seed executado!"
+    else
+        echo "⚠️  Seed falhou, mas continuando..."
+    fi
+fi
+
+# Inicia o backend (SEMPRE na porta 3001)
+echo "🎯 Iniciando backend Node.js..."
+PORT=3001 NODE_ENV=${NODE_ENV:-production} node src/server.js &
 BACKEND_PID=$!
 
-# Aguarda o backend iniciar (máximo 60 segundos)
-echo "Aguardando backend iniciar..."
-WAIT_TIME=0
+# Aguarda backend iniciar
+echo "⏳ Aguardando backend iniciar..."
 MAX_WAIT=60
+WAIT_COUNT=0
 
-while [ $WAIT_TIME -lt $MAX_WAIT ]; do
+while [ $WAIT_COUNT -lt $MAX_WAIT ]; do
     if check_backend; then
-        echo "✅ Backend iniciado com sucesso!"
+        echo "✅ Backend está rodando!"
+        echo "📡 Testando endpoint: $(curl -s http://127.0.0.1:3001/api/health)"
         break
     fi
-    echo "Aguardando... ($WAIT_TIME/$MAX_WAIT)"
-    sleep 3
-    WAIT_TIME=$((WAIT_TIME + 3))
+    
+    if ! kill -0 $BACKEND_PID 2>/dev/null; then
+        echo "❌ Backend morreu! Verificando logs..."
+        wait $BACKEND_PID
+        exit 1
+    fi
+    
+    echo "   Tentativa $((WAIT_COUNT + 1))/$MAX_WAIT..."
+    sleep 2
+    WAIT_COUNT=$((WAIT_COUNT + 2))
 done
 
-if [ $WAIT_TIME -ge $MAX_WAIT ]; then
-    echo "❌ ERRO: Backend não iniciou no tempo esperado"
-    echo "Verificando logs do backend..."
-    ps aux | grep node
+if [ $WAIT_COUNT -ge $MAX_WAIT ]; then
+    echo "❌ Backend não iniciou após ${MAX_WAIT}s"
+    kill $BACKEND_PID 2>/dev/null
     exit 1
 fi
 
-# Substitui variáveis de ambiente no nginx.conf
-echo "Configurando Nginx para porta ${PORT:-3001}..."
-ACTUAL_PORT=${PORT:-3001}
-echo "Substituindo \${PORT:-3001} por ${ACTUAL_PORT} no nginx.conf..."
-sed -i "s/\${PORT:-3001}/${ACTUAL_PORT}/g" /etc/nginx/http.d/default.conf
-
-# Verifica se a substituição funcionou
-echo "Verificando substituição no nginx.conf..."
-grep -n "proxy_pass" /etc/nginx/http.d/default.conf
-
-# Verifica se os arquivos do frontend existem
-echo "Verificando arquivos do frontend..."
+# Verifica arquivos do frontend
+echo "📂 Verificando arquivos do frontend..."
 if [ ! -f /usr/share/nginx/html/index.html ]; then
-    echo "❌ ERRO: index.html não encontrado em /usr/share/nginx/html/"
-    echo "Listando conteúdo de /usr/share/nginx/html/:"
+    echo "❌ ERRO: index.html não encontrado!"
     ls -la /usr/share/nginx/html/
     exit 1
 fi
 
-echo "✅ Arquivos do frontend encontrados:"
-ls -la /usr/share/nginx/html/
+echo "✅ Frontend encontrado:"
+ls -la /usr/share/nginx/html/ | head -10
 
-# Testa a configuração do nginx
-echo "Testando configuração do nginx..."
-nginx -t || {
-    echo "❌ ERRO: Configuração do nginx inválida"
+# Testa configuração do Nginx
+echo "🔧 Testando configuração do Nginx..."
+if nginx -t; then
+    echo "✅ Configuração do Nginx válida!"
+else
+    echo "❌ Erro na configuração do Nginx!"
+    cat /etc/nginx/http.d/default.conf
     exit 1
-}
+fi
 
-# Inicia o Nginx em foreground
-echo "Iniciando Nginx..."
-echo "✅ Sistema de Finanças está rodando!"
-echo "✅ Frontend React servido pelo Nginx na porta 80"
-echo "✅ Backend Node.js rodando na porta ${PORT:-3001}"
-echo "✅ Proxy configurado: /api -> backend, / -> frontend"
+# Inicia Nginx em foreground
+echo "========================================="
+echo "✅ SISTEMA PRONTO!"
+echo "🌐 Frontend: http://localhost/"
+echo "🔌 Backend: http://localhost:3001/api"
+echo "❤️  Health: http://localhost/health"
+echo "========================================="
 
-# Executa nginx em foreground (não retorna)
+# Mantém Nginx rodando em foreground
 exec nginx -g "daemon off;"

@@ -1,67 +1,71 @@
 import { PrismaClient } from '@prisma/client';
-import bcrypt from 'bcryptjs';
+import dotenv from 'dotenv';
+
+dotenv.config();
 
 const prisma = new PrismaClient();
 
-async function main() {
-  console.log('Seeding database...');
+async function seed() {
+  console.log('🌱 Starting database seed...');
+  
+  try {
+    // Categorias padrão de RECEITA
+    const incomeCategories = [
+      { name: 'Salário', type: 'INCOME', color: '#10B981', icon: '💰' },
+      { name: 'Freelance', type: 'INCOME', color: '#06B6D4', icon: '💻' },
+      { name: 'Investimentos', type: 'INCOME', color: '#8B5CF6', icon: '📈' },
+      { name: 'Vendas', type: 'INCOME', color: '#F59E0B', icon: '🛒' },
+      { name: 'Outros', type: 'INCOME', color: '#6B7280', icon: '➕' }
+    ];
 
-  // Create default admin user if not exists
-  const defaultUser = await prisma.user.upsert({
-    where: { email: 'admin@financas.com' },
-    update: {},
-    create: {
-      email: 'admin@financas.com',
-      name: 'Administrador',
-      password: await bcrypt.hash('admin123', 12)
+    // Categorias padrão de DESPESA
+    const expenseCategories = [
+      { name: 'Alimentação', type: 'EXPENSE', color: '#EF4444', icon: '🍔' },
+      { name: 'Transporte', type: 'EXPENSE', color: '#F59E0B', icon: '🚗' },
+      { name: 'Moradia', type: 'EXPENSE', color: '#3B82F6', icon: '🏠' },
+      { name: 'Saúde', type: 'EXPENSE', color: '#EC4899', icon: '🏥' },
+      { name: 'Educação', type: 'EXPENSE', color: '#14B8A6', icon: '📚' },
+      { name: 'Lazer', type: 'EXPENSE', color: '#A78BFA', icon: '🎮' },
+      { name: 'Compras', type: 'EXPENSE', color: '#F97316', icon: '🛍️' },
+      { name: 'Serviços', type: 'EXPENSE', color: '#0EA5E9', icon: '🔧' },
+      { name: 'Impostos', type: 'EXPENSE', color: '#DC2626', icon: '📋' },
+      { name: 'Outros', type: 'EXPENSE', color: '#6B7280', icon: '➖' }
+    ];
+
+    // Criar categorias
+    for (const category of [...incomeCategories, ...expenseCategories]) {
+      await prisma.category.upsert({
+        where: { 
+          name_type: {
+            name: category.name,
+            type: category.type
+          }
+        },
+        update: {
+          color: category.color,
+          icon: category.icon
+        },
+        create: category
+      });
+      console.log(`✅ Category created/updated: ${category.name} (${category.type})`);
     }
-  });
 
-  console.log('Default user created:', defaultUser.email);
-
-  // Create default categories
-  const categories = [
-    // Income categories
-    { name: 'Salário', type: 'INCOME', color: '#10B981', userId: defaultUser.id },
-    { name: 'Freelance', type: 'INCOME', color: '#059669', userId: defaultUser.id },
-    { name: 'Investimentos', type: 'INCOME', color: '#047857', userId: defaultUser.id },
-    { name: 'Outros Rendimentos', type: 'INCOME', color: '#065f46', userId: defaultUser.id },
-    
-    // Expense categories
-    { name: 'Alimentação', type: 'EXPENSE', color: '#EF4444', userId: defaultUser.id },
-    { name: 'Transporte', type: 'EXPENSE', color: '#DC2626', userId: defaultUser.id },
-    { name: 'Moradia', type: 'EXPENSE', color: '#B91C1C', userId: defaultUser.id },
-    { name: 'Saúde', type: 'EXPENSE', color: '#991B1B', userId: defaultUser.id },
-    { name: 'Educação', type: 'EXPENSE', color: '#7F1D1D', userId: defaultUser.id },
-    { name: 'Lazer', type: 'EXPENSE', color: '#F59E0B', userId: defaultUser.id },
-    { name: 'Roupas', type: 'EXPENSE', color: '#D97706', userId: defaultUser.id },
-    { name: 'Tecnologia', type: 'EXPENSE', color: '#B45309', userId: defaultUser.id },
-    { name: 'Contas', type: 'EXPENSE', color: '#92400E', userId: defaultUser.id },
-    { name: 'Outros Gastos', type: 'EXPENSE', color: '#78350F', userId: defaultUser.id }
-  ];
-
-  for (const category of categories) {
-    await prisma.category.upsert({
-      where: { 
-        name_userId: {
-          name: category.name,
-          userId: category.userId
-        }
-      },
-      update: {},
-      create: category
-    });
+    console.log('✨ Seed completed successfully!');
+  } catch (error) {
+    console.error('❌ Seed failed:', error);
+    throw error;
+  } finally {
+    await prisma.$disconnect();
   }
-
-  console.log('Default categories created');
-  console.log('Database seeded successfully!');
 }
 
-main()
-  .catch((e) => {
-    console.error(e);
-    process.exit(1);
+// Executar seed
+seed()
+  .then(() => {
+    console.log('🎉 Database seeded!');
+    process.exit(0);
   })
-  .finally(async () => {
-    await prisma.$disconnect();
+  .catch((error) => {
+    console.error('💥 Fatal error:', error);
+    process.exit(1);
   });

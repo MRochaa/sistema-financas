@@ -1,58 +1,59 @@
 # ============================================
-# ESTÁGIO 1: Build do Frontend
+# Build do Frontend (SEM NODE_ENV=production)
 # ============================================
 FROM node:20-alpine AS frontend-builder
 
 WORKDIR /app
 
-# Copia arquivos de dependências do frontend (raiz do projeto)
+# Copia arquivos de configuração
 COPY package*.json ./
 COPY tsconfig*.json ./
 COPY vite.config.ts ./
 COPY tailwind.config.js ./
 COPY postcss.config.js ./
 
-# Instala TODAS as dependências (incluindo dev) para o build
-RUN npm install
+# Instala dependências (INCLUINDO devDependencies)
+RUN npm ci
 
-# Copia código fonte do frontend
-COPY src/ ./src/
+# Copia código fonte
 COPY index.html ./
+COPY public/ ./public/
+COPY src/ ./src/
 
-# Executa o build do frontend
-RUN npm run build
+# Build de produção
+RUN npm run build && \
+    echo "Frontend build concluído:" && \
+    ls -la dist/
 
 # ============================================
-# ESTÁGIO 2: Build do Backend
+# Build do Backend
 # ============================================
 FROM node:20-alpine AS backend-builder
 
-# Instala dependências do sistema necessárias para Prisma
+# Dependências do sistema para Prisma
 RUN apk add --no-cache openssl openssl-dev libc6-compat
 
 WORKDIR /app
 
-# Copia arquivos de dependências do backend
+# Copia e instala dependências
 COPY backend/package*.json ./
+RUN npm ci
 
-# Instala todas as dependências
-RUN npm install
-
-# Copia código fonte do backend
+# Copia código fonte
 COPY backend/ ./
 
-# Gera o Prisma Client com os targets binários corretos
+# Gera Prisma Client
 RUN npx prisma generate
 
-# Remove devDependencies mantendo apenas produção
+# Remove devDependencies
 RUN npm prune --production
 
 # ============================================
-# ESTÁGIO 3: Imagem Final de Produção
+# Imagem de Produção
 # ============================================
 FROM node:20-alpine AS production
 
-# Instala nginx, openssl e ferramentas necessárias
+# Instala runtime dependencies
 RUN apk add --no-cache \
     nginx \
     bash \
@@ -61,47 +62,37 @@ RUN apk add --no-cache \
     libc6-compat \
     && rm -rf /var/cache/apk/*
 
-# Cria diretórios necessários com permissões corretas
-RUN mkdir -p /var/log/nginx /var/cache/nginx /var/run/nginx /usr/share/nginx/html \
-    && chown -R nginx:nginx /var/log/nginx /var/cache/nginx /var/run/nginx
+# Cria diretórios necessários
+RUN mkdir -p /var/log/nginx /var/cache/nginx /var/run /usr/share/nginx/html \
+    && chown -R nginx:nginx /var/log/nginx /var/cache/nginx /var/run
 
-# Copia backend compilado com node_modules e prisma client gerado
+# Copia backend pronto
 COPY --from=backend-builder /app /app/backend
 
-# Copia frontend compilado (apenas os arquivos estáticos gerados)
+# Copia frontend buildado
 COPY --from=frontend-builder /app/dist /usr/share/nginx/html
 
-# Verifica se os arquivos foram copiados corretamente
-RUN echo "Verificando arquivos do frontend copiados:" && \
-    ls -la /usr/share/nginx/html/ && \
-    if [ ! -f /usr/share/nginx/html/index.html ]; then \
-        echo "❌ ERRO: index.html não foi copiado!"; \
-        exit 1; \
-    fi && \
-    echo "✅ Frontend copiado com sucesso!"
+# Copia favicon se existir
+COPY --from=frontend-builder /app/public/favicon.svg /usr/share/nginx/html/favicon.svg 2>/dev/null || true
 
-# Copia arquivos públicos (favicon, etc.)
-COPY public/ /tmp/public/
-RUN if [ -f /tmp/public/favicon.svg ]; then cp /tmp/public/favicon.svg /usr/share/nginx/html/favicon.svg; fi
-
-# Copia arquivos de configuração
+# Copia configurações
 COPY nginx.conf /etc/nginx/http.d/default.conf
 COPY start.sh /start.sh
 
-# Ajusta permissões do script
+# Permissões
 RUN chmod +x /start.sh
 
-# Define diretório de trabalho
+# Diretório de trabalho
 WORKDIR /app/backend
 
-# Variáveis de ambiente padrão
+# Variáveis de ambiente (defaults seguros)
 ENV NODE_ENV=production \
     PORT=3001
 
-# Expõe porta 80 para nginx
+# Porta exposta
 EXPOSE 80
 
-# Health check que verifica se nginx está respondendo
+# Healthcheck corrigido
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
     CMD curl -f http://127.0.0.1/health || exit 1
 
