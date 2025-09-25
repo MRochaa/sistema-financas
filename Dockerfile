@@ -50,7 +50,7 @@ RUN npm prune --production
 # ============================================
 # ESTÁGIO 3: Imagem Final de Produção
 # ============================================
-FROM node:20-alpine
+FROM node:20-alpine AS production
 
 # Instala nginx, openssl e ferramentas necessárias
 RUN apk add --no-cache \
