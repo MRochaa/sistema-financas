@@ -111,6 +111,7 @@ async function startServer() {
   
   // Rota 404 para requisições não encontradas (DEVE vir depois das rotas da API)
   app.use('*', (req, res) => {
+    console.log(`❌ Rota não encontrada: ${req.method} ${req.path}`);
     res.status(404).json({ error: 'Rota não encontrada' });
   });
   

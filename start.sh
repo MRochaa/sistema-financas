@@ -3,6 +3,9 @@
 # Script de inicialização do container
 # Gerencia o startup do backend Node.js e frontend Nginx
 
+# Para o script em caso de erro
+set -e
+
 echo "=== Iniciando Sistema de Finanças ==="
 echo "Ambiente: $NODE_ENV"
 echo "Porta Backend: ${PORT:-3001}"
@@ -59,47 +62,20 @@ sed -i "s/\${PORT:-3001}/${ACTUAL_PORT}/g" /etc/nginx/http.d/default.conf
 echo "Verificando configuração do nginx após substituição:"
 grep -n "proxy_pass" /etc/nginx/http.d/default.conf || echo "Nenhum proxy_pass encontrado"
 
+# Testa a configuração do nginx
+echo "Testando configuração do nginx..."
+nginx -t || {
+    echo "❌ ERRO: Configuração do nginx inválida"
+    exit 1
+}
+echo "✅ Configuração do nginx válida"
+
 # Inicia o Nginx em foreground
 echo "Iniciando Nginx..."
-nginx -g "daemon off;" &
-NGINX_PID=$!
-
-# Aguarda um pouco para o nginx inicializar
-sleep 2
-
-# Verifica se o nginx está rodando
-if ! kill -0 $NGINX_PID 2>/dev/null; then
-    echo "❌ ERRO: Nginx não iniciou"
-    exit 1
-fi
-
-echo "✅ Nginx iniciado com sucesso!"
 echo "✅ Sistema de Finanças está rodando!"
+echo "✅ Frontend React servido pelo Nginx na porta 80"
+echo "✅ Backend Node.js rodando na porta ${PORT:-3001}"
+echo "✅ Proxy configurado: /api -> backend, / -> frontend"
 
-# Função para tratar sinais de término
-cleanup() {
-    echo "Encerrando serviços..."
-    kill $BACKEND_PID 2>/dev/null
-    kill $NGINX_PID 2>/dev/null
-    exit 0
-}
-
-# Configura tratamento de sinais
-trap cleanup SIGTERM SIGINT
-
-# Mantém o script rodando e monitora os processos
-while true; do
-    # Verifica se o backend ainda está rodando
-    if ! kill -0 $BACKEND_PID 2>/dev/null; then
-        echo "❌ Backend parou inesperadamente"
-        cleanup
-    fi
-    
-    # Verifica se o nginx ainda está rodando  
-    if ! kill -0 $NGINX_PID 2>/dev/null; then
-        echo "❌ Nginx parou inesperadamente"
-        cleanup
-    fi
-    
-    sleep 10
-done
+# Executa nginx em foreground (não retorna)
+exec nginx -g "daemon off;"
