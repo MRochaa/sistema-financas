@@ -10,7 +10,7 @@ echo "🔌 Porta Backend: 3001 (FIXA)"
 echo "🌐 Porta Nginx: 80"
 echo "========================================="
 
-# Logs detalhados para debug
+# Debug das variáveis
 echo "🔍 DEBUG: Variáveis de ambiente:"
 echo "DATABASE_URL: ${DATABASE_URL:0:50}..."
 echo "JWT_SECRET: ${JWT_SECRET:0:20}..."
@@ -55,9 +55,9 @@ fi
 
 # Inicia o backend (SEMPRE na porta 3001)
 echo "🎯 Iniciando backend Node.js..."
-PORT=3001 NODE_ENV=${NODE_ENV:-production} node src/server.js 2>&1 | tee /tmp/backend.log &
+PORT=3001 NODE_ENV=${NODE_ENV:-production} node src/server.js &
 BACKEND_PID=$!
-echo "📝 Backend PID: $BACKEND_PID"
+echo "🔍 Backend PID: $BACKEND_PID"
 
 # Aguarda backend iniciar
 echo "⏳ Aguardando backend iniciar..."
@@ -67,21 +67,20 @@ WAIT_COUNT=0
 while [ $WAIT_COUNT -lt $MAX_WAIT ]; do
     if check_backend; then
         echo "✅ Backend está rodando!"
+        curl -s http://127.0.0.1:3001/api/health
         echo "📡 Testando endpoint: $(curl -s http://127.0.0.1:3001/api/health)"
         break
     fi
     
     if ! kill -0 $BACKEND_PID 2>/dev/null; then
         echo "❌ Backend morreu! Verificando logs..."
-        echo "📋 Últimas linhas do log do backend:"
-        tail -20 /tmp/backend.log 2>/dev/null || echo "Log não disponível"
         wait $BACKEND_PID
         exit 1
     fi
     
     echo "   Tentativa $((WAIT_COUNT + 1))/$MAX_WAIT..."
-    sleep 2
-    WAIT_COUNT=$((WAIT_COUNT + 2))
+    sleep 1
+    WAIT_COUNT=$((WAIT_COUNT + 1))
 done
 
 if [ $WAIT_COUNT -ge $MAX_WAIT ]; then
@@ -101,11 +100,8 @@ fi
 echo "✅ Frontend encontrado:"
 ls -la /usr/share/nginx/html/ | head -10
 
-# Substitui variável PORT no nginx.conf
-echo "🔧 Configurando porta do backend no Nginx..."
-ACTUAL_PORT=${PORT:-3001}
-sed -i "s/\${PORT:-3001}/${ACTUAL_PORT}/g" /etc/nginx/http.d/default.conf
-echo "✅ Porta configurada: ${ACTUAL_PORT}"
+# NÃO FAZER SUBSTITUIÇÃO DE PORTA - NGINX JÁ ESTÁ CONFIGURADO PARA 3001!
+echo "📌 Nginx configurado para porta fixa 3001"
 
 # Testa configuração do Nginx
 echo "🔧 Testando configuração do Nginx..."
