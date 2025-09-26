@@ -67,14 +67,12 @@ WAIT_COUNT=0
 while [ $WAIT_COUNT -lt $MAX_WAIT ]; do
     if check_backend; then
         echo "✅ Backend está rodando!"
-        curl -s http://127.0.0.1:3001/api/health
         echo "📡 Testando endpoint: $(curl -s http://127.0.0.1:3001/api/health)"
         break
     fi
     
     if ! kill -0 $BACKEND_PID 2>/dev/null; then
-        echo "❌ Backend morreu! Verificando logs..."
-        wait $BACKEND_PID
+        echo "❌ Backend morreu!"
         exit 1
     fi
     

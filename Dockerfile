@@ -93,9 +93,7 @@ ENV NODE_ENV=production \
 # Porta exposta
 EXPOSE 80
 
-# Healthcheck corrigido
-HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
-    CMD curl -f http://127.0.0.1/health || exit 1
+# REMOVER O HEALTHCHECK DAQUI - vai usar o do docker-compose
 
 # Comando de inicialização
 CMD ["/start.sh"]
