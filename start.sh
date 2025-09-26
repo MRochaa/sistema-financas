@@ -101,6 +101,12 @@ fi
 echo "✅ Frontend encontrado:"
 ls -la /usr/share/nginx/html/ | head -10
 
+# Substitui variável PORT no nginx.conf
+echo "🔧 Configurando porta do backend no Nginx..."
+ACTUAL_PORT=${PORT:-3001}
+sed -i "s/\${PORT:-3001}/${ACTUAL_PORT}/g" /etc/nginx/http.d/default.conf
+echo "✅ Porta configurada: ${ACTUAL_PORT}"
+
 # Testa configuração do Nginx
 echo "🔧 Testando configuração do Nginx..."
 if nginx -t; then
