@@ -10,6 +10,13 @@ echo "🔌 Porta Backend: 3001 (FIXA)"
 echo "🌐 Porta Nginx: 80"
 echo "========================================="
 
+# Logs detalhados para debug
+echo "🔍 DEBUG: Variáveis de ambiente:"
+echo "DATABASE_URL: ${DATABASE_URL:0:50}..."
+echo "JWT_SECRET: ${JWT_SECRET:0:20}..."
+echo "FRONTEND_URL: ${FRONTEND_URL}"
+echo "========================================="
+
 # Função para verificar se o backend está pronto
 check_backend() {
     curl -sf http://127.0.0.1:3001/api/health > /dev/null 2>&1
@@ -24,7 +31,7 @@ echo "🔍 Verificando conexão com banco de dados..."
 if npx prisma db execute --stdin <<< "SELECT 1" > /dev/null 2>&1; then
     echo "✅ Banco de dados conectado!"
 else
-    echo "⚠️  Aviso: Não foi possível conectar ao banco"
+    echo "⚠️  Aviso: Não foi possível conectar ao banco - continuando mesmo assim"
 fi
 
 # Executa migrações
@@ -32,7 +39,7 @@ echo "📦 Executando migrações do banco..."
 if npx prisma migrate deploy; then
     echo "✅ Migrações aplicadas com sucesso!"
 else
-    echo "⚠️  Migrações já aplicadas ou erro não crítico"
+    echo "⚠️  Migrações falharam - continuando mesmo assim"
 fi
 
 # Executa seed se necessário
@@ -48,8 +55,9 @@ fi
 
 # Inicia o backend (SEMPRE na porta 3001)
 echo "🎯 Iniciando backend Node.js..."
-PORT=3001 NODE_ENV=${NODE_ENV:-production} node src/server.js &
+PORT=3001 NODE_ENV=${NODE_ENV:-production} node src/server.js 2>&1 | tee /tmp/backend.log &
 BACKEND_PID=$!
+echo "📝 Backend PID: $BACKEND_PID"
 
 # Aguarda backend iniciar
 echo "⏳ Aguardando backend iniciar..."
@@ -65,6 +73,8 @@ while [ $WAIT_COUNT -lt $MAX_WAIT ]; do
     
     if ! kill -0 $BACKEND_PID 2>/dev/null; then
         echo "❌ Backend morreu! Verificando logs..."
+        echo "📋 Últimas linhas do log do backend:"
+        tail -20 /tmp/backend.log 2>/dev/null || echo "Log não disponível"
         wait $BACKEND_PID
         exit 1
     fi
