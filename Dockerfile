@@ -12,8 +12,10 @@ COPY vite.config.ts ./
 COPY tailwind.config.js ./
 COPY postcss.config.js ./
 
-# Instala dependências (INCLUINDO devDependencies)
-RUN npm ci
+# CORREÇÃO: Instalar dependências e forçar reinstalação do Rollup
+RUN npm ci && \
+    npm rebuild && \
+    npm install --save-dev @rollup/rollup-linux-x64-musl
 
 # Copia código fonte
 COPY index.html ./
