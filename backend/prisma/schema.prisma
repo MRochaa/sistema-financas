@@ -49,20 +49,20 @@ model Account {
 model Category {
   id        String   @id @default(uuid())
   name      String
-  type      String   // income, expense
+  type      String   // INCOME ou EXPENSE
   icon      String?
   color     String?
-  userId    String
+  userId    String?  // Tornar opcional para categorias padrão
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   
   // Relacionamentos
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user User? @relation(fields: [userId], references: [id], onDelete: Cascade)
   transactions Transaction[]
   budgets Budget[]
   
   @@index([userId])
-  @@unique([name, userId])
+  @@unique([name, type], name: "name_type")  // Adicionar nome do índice
 }
 
 // Modelo de Transação - registros financeiros

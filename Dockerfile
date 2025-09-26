@@ -72,8 +72,7 @@ COPY --from=backend-builder /app /app/backend
 # Copia frontend buildado
 COPY --from=frontend-builder /app/dist /usr/share/nginx/html
 
-# Copia favicon se existir
-COPY --from=frontend-builder /app/public/favicon.svg /usr/share/nginx/html/favicon.svg 2>/dev/null || true
+# Favicon já está incluído no dist/ copiado acima
 
 # Copia configurações
 COPY nginx.conf /etc/nginx/http.d/default.conf

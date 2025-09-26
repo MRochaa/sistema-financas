@@ -36,7 +36,7 @@ async function seed() {
     for (const category of [...incomeCategories, ...expenseCategories]) {
       await prisma.category.upsert({
         where: { 
-          name_type: {
+          name_type: {  // Usar o nome correto do índice único
             name: category.name,
             type: category.type
           }
@@ -45,7 +45,10 @@ async function seed() {
           color: category.color,
           icon: category.icon
         },
-        create: category
+        create: {
+          ...category,
+          userId: null  // Categorias padrão sem usuário específico
+        }
       });
       console.log(`✅ Category created/updated: ${category.name} (${category.type})`);
     }
