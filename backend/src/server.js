@@ -150,6 +150,12 @@ process.on('SIGINT', async () => {
   process.exit(0);
 });
 
+// Logs de debug para Coolify
+console.log('🔍 DEBUG: Iniciando servidor...');
+console.log('🔍 DEBUG: NODE_ENV:', process.env.NODE_ENV);
+console.log('🔍 DEBUG: PORT:', process.env.PORT);
+console.log('🔍 DEBUG: DATABASE_URL:', process.env.DATABASE_URL ? 'Definida' : 'Não definida');
+
 // Inicia o servidor
 startServer().catch(error => {
   console.error('Erro fatal ao iniciar servidor:', error);

@@ -119,5 +119,18 @@ echo "🔌 Backend: http://localhost:3001/api"
 echo "❤️  Health: http://localhost/health"
 echo "========================================="
 
+# Logs de debug para Coolify
+echo "🔍 DEBUG: Verificando se backend está respondendo..."
+curl -v http://127.0.0.1:3001/api/health || echo "❌ Backend não respondeu"
+
+echo "🔍 DEBUG: Verificando se nginx está configurado..."
+nginx -T 2>&1 | grep -A 5 -B 5 "location /health" || echo "❌ Nginx health location não encontrada"
+
+echo "🔍 DEBUG: Verificando processos rodando..."
+ps aux | grep -E "(node|nginx)" || echo "❌ Processos não encontrados"
+
+echo "🔍 DEBUG: Verificando portas abertas..."
+netstat -tlpn 2>/dev/null | grep -E "(80|3001)" || ss -tlpn 2>/dev/null | grep -E "(80|3001)" || echo "❌ Portas não encontradas"
+
 # Mantém Nginx rodando em foreground
 exec nginx -g "daemon off;"

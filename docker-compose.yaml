@@ -16,13 +16,12 @@ services:
       - "80:80"
     networks:
       - coolify
-    # healthcheck removido temporariamente para evitar erro de template parsing
-    # healthcheck:
-    #   test: ["CMD", "curl", "-f", "http://localhost/health", "||", "exit", "1"]
-    #   interval: 30s
-    #   timeout: 15s
-    #   retries: 5
-    #   start_period: 90s
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
 
 networks:
   coolify:
