@@ -35,9 +35,7 @@ coverage/
 .gitignore
 
 # Docker
-Dockerfile
-docker-compose*.yml
-.dockerignore
+# NÃO ignorar Dockerfile e docker-compose - são necessários para o build
 
 # Temporary
 tmp/
