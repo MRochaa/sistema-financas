@@ -121,16 +121,16 @@ echo "========================================="
 
 # Logs de debug para Coolify
 echo "🔍 DEBUG: Verificando se backend está respondendo..."
-curl -v http://127.0.0.1:3001/api/health || echo "❌ Backend não respondeu"
+curl -s http://127.0.0.1:3001/api/health && echo "✅ Backend OK" || echo "❌ Backend não respondeu"
 
 echo "🔍 DEBUG: Verificando se nginx está configurado..."
-nginx -T 2>&1 | grep -A 5 -B 5 "location /health" || echo "❌ Nginx health location não encontrada"
+nginx -t && echo "✅ Nginx config OK" || echo "❌ Nginx config error"
 
 echo "🔍 DEBUG: Verificando processos rodando..."
-ps aux | grep -E "(node|nginx)" || echo "❌ Processos não encontrados"
+ps aux | grep -E "(node|nginx)" | head -5
 
 echo "🔍 DEBUG: Verificando portas abertas..."
-netstat -tlpn 2>/dev/null | grep -E "(80|3001)" || ss -tlpn 2>/dev/null | grep -E "(80|3001)" || echo "❌ Portas não encontradas"
+netstat -tlpn 2>/dev/null | grep -E "(80|3001)" | head -3 || ss -tlpn 2>/dev/null | grep -E "(80|3001)" | head -3
 
 # Mantém Nginx rodando em foreground
 exec nginx -g "daemon off;"

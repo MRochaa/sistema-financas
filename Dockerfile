@@ -93,7 +93,9 @@ ENV NODE_ENV=production \
 # Porta exposta
 EXPOSE 80
 
-# REMOVER O HEALTHCHECK DAQUI - vai usar o do docker-compose
+# Healthcheck no Dockerfile (mais confiável que docker-compose)
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
+  CMD curl -f http://localhost/health || exit 1
 
 # Comando de inicialização
 CMD ["/start.sh"]
