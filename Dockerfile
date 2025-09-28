@@ -18,6 +18,7 @@ RUN npm ci && \
     npm install --save-dev @rollup/rollup-linux-x64-musl
 
 # Copia código fonte
+COPY index.html ./
 COPY public/ ./public/
 COPY src/ ./src/
 
