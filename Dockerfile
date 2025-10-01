@@ -1,76 +1,75 @@
 # ============================================
-# Build Frontend
+# Multi-stage build para otimização
 # ============================================
+
+# Stage 1: Build Frontend
 FROM node:20-alpine AS frontend-builder
 WORKDIR /app
+
+# Instala dependências de build
 RUN apk add --no-cache python3 make g++
+
+# Copia e instala dependências do frontend
 COPY package*.json ./
-RUN npm install
+RUN npm ci --only=production && npm cache clean --force
+
+# Copia código e build
 COPY . .
 RUN npm run build
 
-# ============================================
-# Build Backend
-# ============================================
+# Stage 2: Build Backend e preparar Prisma
 FROM node:20-alpine AS backend-builder
 WORKDIR /app
 
-# Copia arquivos do backend
+# Copia dependências do backend
 COPY backend/package*.json ./
+RUN npm ci --only=production && npm cache clean --force
+
+# Copia schema do Prisma
 COPY backend/prisma ./prisma/
-
-# Instala dependências
-RUN npm install
-
-# Copia resto do backend
-COPY backend/ ./
 
 # Gera Prisma Client
 RUN npx prisma generate
 
-# ============================================
-# Imagem Final de Produção
-# ============================================
-FROM node:20-alpine
+# Copia código do backend
+COPY backend/src ./src/
+COPY backend/entrypoint.sh ./entrypoint.sh
 
-# Instala ferramentas necessárias
+# Stage 3: Imagem Final de Produção
+FROM node:20-alpine
+WORKDIR /app
+
+# Instala ferramentas essenciais
 RUN apk add --no-cache \
     curl \
     postgresql-client \
     netcat-openbsd \
-    bash
-
-# Cria diretório
-WORKDIR /app
+    bash \
+    && rm -rf /var/cache/apk/*
 
 # Copia frontend buildado
 COPY --from=frontend-builder /app/dist ./public
 
-# Copia backend completo com node_modules e Prisma Client gerado
-COPY --from=backend-builder /app ./backend
+# Copia backend
+COPY --from=backend-builder /app/node_modules ./node_modules
+COPY --from=backend-builder /app/src ./src
+COPY --from=backend-builder /app/prisma ./prisma
+COPY --from=backend-builder /app/package*.json ./
+COPY --from=backend-builder /app/entrypoint.sh ./entrypoint.sh
 
-# Copia node_modules do backend para raiz
-RUN cp -r ./backend/node_modules ./node_modules
+# Permissões no entrypoint
+RUN chmod +x ./entrypoint.sh
 
-# Copia arquivos do servidor para raiz
-RUN cp -r ./backend/src ./src && \
-    cp -r ./backend/prisma ./prisma && \
-    cp ./backend/package.json ./package.json
-
-# Copia scripts de inicialização
-COPY --from=backend-builder /app/entrypoint.sh /app/entrypoint.sh
-RUN chmod +x /app/entrypoint.sh
-
-# Variáveis de ambiente
+# Variáveis de ambiente padrão
 ENV NODE_ENV=production
 ENV PORT=3000
 
-# Porta
+# Expõe a porta
 EXPOSE 3000
 
 # Health check
-HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
+HEALTHCHECK --interval=30s --timeout=10s --start-period=90s --retries=3 \
     CMD curl -f http://localhost:3000/health || exit 1
 
-# Usa o entrypoint para inicializar
-ENTRYPOINT ["/app/entrypoint.sh"]
+# Inicia aplicação
+ENTRYPOINT ["./entrypoint.sh"]

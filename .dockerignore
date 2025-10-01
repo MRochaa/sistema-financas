@@ -1,15 +1,46 @@
+# Dependencies
 node_modules
+backend/node_modules
 npm-debug.log
-.git
-.gitignore
-README.md
-.env
-.env.local
-.vscode
-.idea
+package-lock.json.bak
+
+# Build outputs
 dist
 build
-*.log
-backend/node_modules
 backend/dist
 backend/build
+
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# IDE
+.vscode
+.idea
+*.swp
+*.swo
+
+# Git
+.git
+.gitignore
+.gitattributes
+
+# Documentation (exceto necessários)
+*.md
+!README.md
+
+# Logs
+*.log
+logs
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Testing
+coverage
+.nyc_output
+
+# Coolify specific
+.coolify
