@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { useAuth } from './AuthContext';
 import toast from 'react-hot-toast';
-import axios from 'axios';
+import { supabase } from '../lib/supabase';
 
 // Security: Input validation and sanitization
 const sanitizeInput = (input: string): string => {
@@ -83,8 +83,13 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const loadCategories = async () => {
     try {
       setLoading(true);
-      const response = await axios.get('/api/categories');
-      setCategories(response.data);
+      const { data, error } = await supabase
+        .from('categories')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+      setCategories(data || []);
     } catch (error) {
       console.error('Error loading categories:', error);
       toast.error('Erro ao carregar categorias');
@@ -96,8 +101,27 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const loadTransactions = async () => {
     try {
       setLoading(true);
-      const response = await axios.get('/api/transactions');
-      setTransactions(response.data.transactions || []);
+      const { data, error } = await supabase
+        .from('transactions')
+        .select(`
+          *,
+          category:categories(*)
+        `)
+        .order('date', { ascending: false });
+
+      if (error) throw error;
+
+      const formattedTransactions = (data || []).map(t => ({
+        id: t.id,
+        type: t.type,
+        amount: parseFloat(t.amount),
+        description: t.description,
+        date: t.date,
+        category: t.category,
+        user: { name: user?.name || '', email: user?.email || '' }
+      }));
+
+      setTransactions(formattedTransactions);
     } catch (error) {
       console.error('Error loading transactions:', error);
       toast.error('Erro ao carregar transações');
@@ -123,13 +147,19 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       const sanitizedName = sanitizeInput(categoryData.name);
       
-        const response = await axios.post('/api/categories', {
-          name: sanitizedName,
-          type: categoryData.type,
-          color: categoryData.color || '#6B7280'
-        });
+        const { data, error } = await supabase
+          .from('categories')
+          .insert({
+            user_id: user?.id,
+            name: sanitizedName,
+            type: categoryData.type,
+            color: categoryData.color || '#6B7280'
+          })
+          .select()
+          .single();
 
-        const newCategory = response.data;
+        if (error) throw error;
+        const newCategory = data;
         setCategories(prev => [...prev, newCategory]);
         toast.success('Categoria criada com sucesso');
         resolve(newCategory);
@@ -153,13 +183,20 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       
       const sanitizedName = sanitizeInput(categoryData.name);
       
-        const response = await axios.put(`/api/categories/${id}`, {
-          name: sanitizedName,
-          type: categoryData.type,
-          color: categoryData.color
-        });
+        const { data, error } = await supabase
+          .from('categories')
+          .update({
+            name: sanitizedName,
+            type: categoryData.type,
+            color: categoryData.color,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', id)
+          .select()
+          .single();
 
-        const updatedCategory = response.data;
+        if (error) throw error;
+        const updatedCategory = data;
         setCategories(prev => prev.map(cat => 
           cat.id === id ? updatedCategory : cat
         ));
@@ -181,7 +218,12 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const deleteCategory = (id: string) => {
     return new Promise(async (resolve, reject) => {
       try {
-        await axios.delete(`/api/categories/${id}`);
+        const { error } = await supabase
+          .from('categories')
+          .delete()
+          .eq('id', id);
+
+        if (error) throw error;
         setCategories(prev => prev.filter(cat => cat.id !== id));
         toast.success('Categoria excluída com sucesso');
         resolve(true);
@@ -217,15 +259,33 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const sanitizedDescription = transactionData.description ? 
         sanitizeInput(transactionData.description).substring(0, 500) : undefined;
 
-        const response = await axios.post('/api/transactions', {
-          type: transactionData.type,
-          amount: transactionData.amount,
-        description: sanitizedDescription,
-          date: transactionData.date,
-          categoryId: transactionData.categoryId
-        });
+        const { data, error } = await supabase
+          .from('transactions')
+          .insert({
+            user_id: user?.id,
+            category_id: transactionData.categoryId,
+            type: transactionData.type,
+            amount: transactionData.amount,
+            description: sanitizedDescription,
+            date: transactionData.date
+          })
+          .select(`
+            *,
+            category:categories(*)
+          `)
+          .single();
 
-        const newTransaction = response.data;
+        if (error) throw error;
+
+        const newTransaction = {
+          id: data.id,
+          type: data.type,
+          amount: parseFloat(data.amount),
+          description: data.description,
+          date: data.date,
+          category: data.category,
+          user: { name: user?.name || '', email: user?.email || '' }
+        };
         setTransactions(prev => [newTransaction, ...prev]);
         toast.success('Transação criada com sucesso');
         resolve(newTransaction);
@@ -255,15 +315,34 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const sanitizedDescription = transactionData.description ? 
         sanitizeInput(transactionData.description).substring(0, 500) : undefined;
 
-        const response = await axios.put(`/api/transactions/${id}`, {
-          type: transactionData.type,
-          amount: transactionData.amount,
-              description: sanitizedDescription,
-          date: transactionData.date,
-          categoryId: transactionData.categoryId
-        });
+        const { data, error } = await supabase
+          .from('transactions')
+          .update({
+            category_id: transactionData.categoryId,
+            type: transactionData.type,
+            amount: transactionData.amount,
+            description: sanitizedDescription,
+            date: transactionData.date,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', id)
+          .select(`
+            *,
+            category:categories(*)
+          `)
+          .single();
 
-        const updatedTransaction = response.data;
+        if (error) throw error;
+
+        const updatedTransaction = {
+          id: data.id,
+          type: data.type,
+          amount: parseFloat(data.amount),
+          description: data.description,
+          date: data.date,
+          category: data.category,
+          user: { name: user?.name || '', email: user?.email || '' }
+        };
         setTransactions(prev => prev.map(transaction => 
           transaction.id === id ? updatedTransaction : transaction
         ));
@@ -282,7 +361,12 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const deleteTransaction = (id: string) => {
     return new Promise(async (resolve, reject) => {
       try {
-        await axios.delete(`/api/transactions/${id}`);
+        const { error } = await supabase
+          .from('transactions')
+          .delete()
+          .eq('id', id);
+
+        if (error) throw error;
         setTransactions(prev => prev.filter(t => t.id !== id));
         toast.success('Transação excluída com sucesso');
         resolve(true);
