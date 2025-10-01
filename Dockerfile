@@ -1,60 +1,16 @@
 # ============================================
-# Stage 1: Build Frontend
-# ============================================
-FROM node:20-alpine AS frontend-builder
-
-WORKDIR /app
-
-# Instala dependências de build
-RUN apk add --no-cache python3 make g++ git
-
-# Copia package.json e package-lock.json
-COPY package*.json ./
-
-# Instala dependências
-RUN npm ci --only=production --ignore-scripts || npm install --only=production
-
-# Copia código fonte
-COPY . .
-
-# Build do frontend
-RUN npm run build
-
-# ============================================
-# Stage 2: Build Backend
-# ============================================
-FROM node:20-alpine AS backend-builder
-
-WORKDIR /app
-
-# Instala dependências necessárias
-RUN apk add --no-cache python3 make g++ git openssl
-
-# Copia package.json do backend
-COPY backend/package*.json ./
-
-# Instala dependências do backend
-RUN npm ci --only=production --ignore-scripts || npm install --only=production
-
-# Copia schema do Prisma
-COPY backend/prisma ./prisma/
-
-# Gera Prisma Client
-RUN npx prisma generate
-
-# Copia código do backend
-COPY backend/src ./src/
-COPY backend/entrypoint.sh ./entrypoint.sh
-
-# ============================================
-# Stage 3: Production Image
+# Dockerfile simplificado para Coolify
 # ============================================
 FROM node:20-alpine
 
 WORKDIR /app
 
-# Instala ferramentas necessárias
+# Instala todas as ferramentas necessárias de uma vez
 RUN apk add --no-cache \
+    python3 \
+    make \
+    g++ \
+    git \
     curl \
     bash \
     postgresql-client \
@@ -62,15 +18,44 @@ RUN apk add --no-cache \
     openssl \
     && rm -rf /var/cache/apk/*
 
-# Copia frontend buildado
-COPY --from=frontend-builder /app/dist ./public
+# ============================================
+# Build Frontend
+# ============================================
 
-# Copia backend completo
-COPY --from=backend-builder /app/node_modules ./node_modules
-COPY --from=backend-builder /app/src ./src
-COPY --from=backend-builder /app/prisma ./prisma
-COPY --from=backend-builder /app/package*.json ./
-COPY --from=backend-builder /app/entrypoint.sh ./entrypoint.sh
+# Copia package.json do frontend
+COPY package*.json ./
+RUN npm install
+
+# Copia código do frontend
+COPY tsconfig*.json vite.config.ts index.html postcss.config.js tailwind.config.js ./
+COPY src ./src
+
+# Build do frontend
+RUN npm run build
+
+# ============================================
+# Setup Backend
+# ============================================
+
+# Muda para o diretório do backend
+WORKDIR /app/backend
+
+# Copia package.json e instala dependências
+COPY backend/package*.json ./
+RUN npm install
+
+# Copia o schema do Prisma primeiro
+COPY backend/prisma ./prisma/
+
+# Gera Prisma Client
+RUN npx prisma generate
+
+# Copia o resto do backend
+COPY backend/src ./src/
+COPY backend/entrypoint.sh ./entrypoint.sh
+
+# Move o frontend buildado para a pasta public
+RUN mv /app/dist ./public
 
 # Permissões no entrypoint
 RUN chmod +x ./entrypoint.sh
