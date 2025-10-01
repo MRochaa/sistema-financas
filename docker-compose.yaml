@@ -1,16 +1,43 @@
 version: '3.8'
 
 services:
+  # PostgreSQL Database - Nome único para evitar conflitos
+  postgres_financas_lar:
+    image: postgres:16-alpine
+    container_name: postgres_financas_lar
+    environment:
+      POSTGRES_USER: ${FINANCAS_POSTGRES_USER:-financas_user}
+      POSTGRES_PASSWORD: ${FINANCAS_POSTGRES_PASSWORD:-financas_senha_123}
+      POSTGRES_DB: ${FINANCAS_POSTGRES_DB:-financas_lar_db}
+      PGDATA: /var/lib/postgresql/data/pgdata
+    volumes:
+      - postgres_financas_lar_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${FINANCAS_POSTGRES_USER:-financas_user} -d ${FINANCAS_POSTGRES_DB:-financas_lar_db}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    restart: unless-stopped
+    networks:
+      - financas_lar_network
+
+  # Aplicação Principal (Frontend + Backend)
   app:
     build: .
-    container_name: sistema-financas
+    container_name: sistema_financas_lar
     ports:
       - "3000:3000"
     environment:
       - NODE_ENV=production
       - PORT=3000
-      - DATABASE_URL=${DATABASE_URL}
+      - DATABASE_URL=postgresql://${FINANCAS_POSTGRES_USER:-financas_user}:${FINANCAS_POSTGRES_PASSWORD:-financas_senha_123}@postgres_financas_lar:5432/${FINANCAS_POSTGRES_DB:-financas_lar_db}?schema=public
       - JWT_SECRET=${JWT_SECRET}
+      - JWT_EXPIRES_IN=${JWT_EXPIRES_IN:-7d}
+      - BCRYPT_ROUNDS=${BCRYPT_ROUNDS:-12}
+    depends_on:
+      postgres_financas_lar:
+        condition: service_healthy
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
       interval: 30s
@@ -19,10 +46,17 @@ services:
       start_period: 60s
     restart: unless-stopped
     networks:
+      - financas_lar_network
       - coolify
       - default
 
+volumes:
+  postgres_financas_lar_data:
+    driver: local
+
 networks:
+  financas_lar_network:
+    driver: bridge
   coolify:
     external: true
   default:

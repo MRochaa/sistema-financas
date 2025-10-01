@@ -4,20 +4,13 @@ const { PrismaClient } = require('@prisma/client');
 const auth = require('../middleware/auth');
 
 const router = express.Router();
-const prisma = new PrismaClient({
-  datasources: {
-    db: {
-      url: process.env.DATABASE_URL
-    }
-  }
-});
+const prisma = new PrismaClient();
 
-// Input sanitization
 const sanitizeInput = (input) => {
   return input.trim().replace(/[<>]/g, '');
 };
 
-// Get all categories for the authenticated user
+// Get all categories
 router.get('/', auth, async (req, res) => {
   try {
     const categories = await prisma.category.findMany({
@@ -28,7 +21,7 @@ router.get('/', auth, async (req, res) => {
       ]
     });
 
-    res.json(categories);
+    res.json({ categories });
 
   } catch (error) {
     console.error('Get categories error:', error);
@@ -36,20 +29,13 @@ router.get('/', auth, async (req, res) => {
   }
 });
 
-// Create a new category
+// Create category
 router.post('/', auth, [
-  body('name')
-    .isLength({ min: 1, max: 100 })
-    .withMessage('Name must be between 1 and 100 characters'),
-  body('type')
-    .isIn(['INCOME', 'EXPENSE'])
-    .withMessage('Type must be INCOME or EXPENSE'),
-  body('color')
-    .matches(/^#[0-9A-F]{6}$/i)
-    .withMessage('Color must be a valid hex color')
+  body('name').isLength({ min: 1, max: 100 }),
+  body('type').isIn(['INCOME', 'EXPENSE']),
+  body('color').matches(/^#[0-9A-F]{6}$/i)
 ], async (req, res) => {
   try {
-    // Check validation errors
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
       return res.status(400).json({ 
@@ -61,7 +47,6 @@ router.post('/', auth, [
     const { name, type, color } = req.body;
     const sanitizedName = sanitizeInput(name);
 
-    // Check if category with same name and type already exists for this user
     const existingCategory = await prisma.category.findFirst({
       where: {
         userId: req.userId,
@@ -71,7 +56,7 @@ router.post('/', auth, [
     });
 
     if (existingCategory) {
-      return res.status(400).json({ error: 'Category with this name and type already exists' });
+      return res.status(400).json({ error: 'Category already exists' });
     }
 
     const category = await prisma.category.create({
@@ -83,7 +68,7 @@ router.post('/', auth, [
       }
     });
 
-    res.status(201).json(category);
+    res.status(201).json({ category });
 
   } catch (error) {
     console.error('Create category error:', error);
@@ -91,20 +76,12 @@ router.post('/', auth, [
   }
 });
 
-// Update a category
+// Update category
 router.put('/:id', auth, [
-  body('name')
-    .isLength({ min: 1, max: 100 })
-    .withMessage('Name must be between 1 and 100 characters'),
-  body('type')
-    .isIn(['INCOME', 'EXPENSE'])
-    .withMessage('Type must be INCOME or EXPENSE'),
-  body('color')
-    .matches(/^#[0-9A-F]{6}$/i)
-    .withMessage('Color must be a valid hex color')
+  body('name').optional().isLength({ min: 1, max: 100 }),
+  body('color').optional().matches(/^#[0-9A-F]{6}$/i)
 ], async (req, res) => {
   try {
-    // Check validation errors
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
       return res.status(400).json({ 
@@ -114,45 +91,32 @@ router.put('/:id', auth, [
     }
 
     const { id } = req.params;
-    const { name, type, color } = req.body;
-    const sanitizedName = sanitizeInput(name);
+    const updates = {};
 
-    // Check if category exists and belongs to user
-    const existingCategory = await prisma.category.findFirst({
+    if (req.body.name) {
+      updates.name = sanitizeInput(req.body.name);
+    }
+    if (req.body.color) {
+      updates.color = req.body.color;
+    }
+
+    const category = await prisma.category.updateMany({
       where: {
         id: id,
         userId: req.userId
-      }
+      },
+      data: updates
     });
 
-    if (!existingCategory) {
+    if (category.count === 0) {
       return res.status(404).json({ error: 'Category not found' });
     }
 
-    // Check if another category with same name and type already exists for this user
-    const duplicateCategory = await prisma.category.findFirst({
-      where: {
-        userId: req.userId,
-        name: sanitizedName,
-        type: type,
-        id: { not: id }
-      }
+    const updatedCategory = await prisma.category.findUnique({
+      where: { id }
     });
 
-    if (duplicateCategory) {
-      return res.status(400).json({ error: 'Category with this name and type already exists' });
-    }
-
-    const category = await prisma.category.update({
-      where: { id: id },
-      data: {
-        name: sanitizedName,
-        type,
-        color
-      }
-    });
-
-    res.json(category);
+    res.json({ category: updatedCategory });
 
   } catch (error) {
     console.error('Update category error:', error);
@@ -160,43 +124,33 @@ router.put('/:id', auth, [
   }
 });
 
-// Delete a category
+// Delete category
 router.delete('/:id', auth, async (req, res) => {
   try {
     const { id } = req.params;
 
-    // Check if category exists and belongs to user
-    const existingCategory = await prisma.category.findFirst({
+    const deleted = await prisma.category.deleteMany({
       where: {
         id: id,
         userId: req.userId
       }
     });
 
-    if (!existingCategory) {
+    if (deleted.count === 0) {
       return res.status(404).json({ error: 'Category not found' });
     }
-
-    // Check if category has transactions
-    const transactionCount = await prisma.transaction.count({
-      where: { categoryId: id }
-    });
-
-    if (transactionCount > 0) {
-      return res.status(400).json({ 
-        error: 'Cannot delete category with existing transactions',
-        transactionCount 
-      });
-    }
-
-    await prisma.category.delete({
-      where: { id: id }
-    });
 
     res.json({ message: 'Category deleted successfully' });
 
   } catch (error) {
     console.error('Delete category error:', error);
+    
+    if (error.code === 'P2003') {
+      return res.status(400).json({ 
+        error: 'Cannot delete category with associated transactions' 
+      });
+    }
+    
     res.status(500).json({ error: 'Internal server error' });
   }
 });

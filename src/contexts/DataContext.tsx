@@ -1,56 +1,43 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
-import { useAuth } from './AuthContext';
+import React, { createContext, useContext, useEffect, useState } from 'react';
 import toast from 'react-hot-toast';
-import { supabase } from '../lib/supabase';
+import { useAuth } from './AuthContext';
+import { categoryService, transactionService } from '../services/api';
 
-// Security: Input validation and sanitization
-const sanitizeInput = (input: string): string => {
-  return input.trim().replace(/[<>]/g, '');
-};
-
-const validateAmount = (amount: number): boolean => {
-  return !isNaN(amount) && amount > 0 && amount <= 999999999.99;
-};
-
-const validateDate = (date: string): boolean => {
-  const parsedDate = new Date(date);
-  const now = new Date();
-  const minDate = new Date('2000-01-01');
-  const maxDate = new Date(now.getFullYear() + 10, 11, 31);
-  
-  return parsedDate >= minDate && parsedDate <= maxDate;
-};
-
-interface Category {
+export interface Category {
   id: string;
   name: string;
   type: 'INCOME' | 'EXPENSE';
   color: string;
+  userId: string;
+  createdAt: string;
+  updatedAt: string;
 }
 
-interface Transaction {
+export interface Transaction {
   id: string;
   type: 'INCOME' | 'EXPENSE';
   amount: number;
   description?: string;
   date: string;
-  category: Category;
-  user: { name: string; email: string };
+  categoryId: string;
+  userId: string;
+  category?: Category;
+  createdAt: string;
+  updatedAt: string;
 }
 
 interface DataContextType {
   categories: Category[];
   transactions: Transaction[];
   loading: boolean;
-  user: any;
-  // Category methods
-  addCategory: (category: Omit<Category, 'id'>) => void;
-  updateCategory: (id: string, category: Omit<Category, 'id'>) => void;
-  deleteCategory: (id: string) => void;
-  // Transaction methods
-  addTransaction: (transaction: Omit<Transaction, 'id' | 'category' | 'user'> & { categoryId: string }) => void;
-  updateTransaction: (id: string, transaction: Omit<Transaction, 'id' | 'category' | 'user'> & { categoryId: string }) => void;
-  deleteTransaction: (id: string) => void;
+  refreshCategories: () => Promise<void>;
+  refreshTransactions: () => Promise<void>;
+  addCategory: (category: Omit<Category, 'id' | 'userId' | 'createdAt' | 'updatedAt'>) => Promise<void>;
+  updateCategory: (id: string, updates: Partial<Category>) => Promise<void>;
+  deleteCategory: (id: string) => Promise<void>;
+  addTransaction: (transaction: Omit<Transaction, 'id' | 'userId' | 'createdAt' | 'updatedAt' | 'category'>) => Promise<void>;
+  updateTransaction: (id: string, updates: Partial<Transaction>) => Promise<void>;
+  deleteTransaction: (id: string) => Promise<void>;
 }
 
 const DataContext = createContext<DataContextType | undefined>(undefined);
@@ -64,332 +51,133 @@ export const useData = () => {
 };
 
 export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const { user } = useAuth();
   const [categories, setCategories] = useState<Category[]>([]);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
-  const [loading, setLoading] = useState(false);
-  const { user } = useAuth();
+  const [loading, setLoading] = useState(true);
 
-  // Load data when user changes
-  useEffect(() => {
-    if (user) {
-      loadCategories();
-      loadTransactions();
-    } else {
-      setCategories([]);
-      setTransactions([]);
+  const refreshCategories = async () => {
+    if (!user) return;
+    try {
+      const data = await categoryService.getAll();
+      setCategories(data);
+    } catch (error: any) {
+      console.error('Error fetching categories:', error);
+      toast.error('Erro ao carregar categorias');
     }
+  };
+
+  const refreshTransactions = async () => {
+    if (!user) return;
+    try {
+      const data = await transactionService.getAll();
+      setTransactions(data);
+    } catch (error: any) {
+      console.error('Error fetching transactions:', error);
+      toast.error('Erro ao carregar transações');
+    }
+  };
+
+  useEffect(() => {
+    const loadData = async () => {
+      if (user) {
+        setLoading(true);
+        await Promise.all([refreshCategories(), refreshTransactions()]);
+        setLoading(false);
+      } else {
+        setCategories([]);
+        setTransactions([]);
+        setLoading(false);
+      }
+    };
+
+    loadData();
   }, [user]);
 
-  const loadCategories = async () => {
+  const addCategory = async (categoryData: Omit<Category, 'id' | 'userId' | 'createdAt' | 'updatedAt'>) => {
     try {
-      setLoading(true);
-      const { data, error } = await supabase
-        .from('categories')
-        .select('*')
-        .order('created_at', { ascending: false });
-
-      if (error) throw error;
-      setCategories(data || []);
-    } catch (error) {
-      console.error('Error loading categories:', error);
-      toast.error('Erro ao carregar categorias');
-    } finally {
-      setLoading(false);
+      const newCategory = await categoryService.create(categoryData);
+      setCategories([...categories, newCategory]);
+      toast.success('Categoria criada com sucesso!');
+    } catch (error: any) {
+      const message = error.response?.data?.error || 'Erro ao criar categoria';
+      toast.error(message);
+      throw error;
     }
   };
 
-  const loadTransactions = async () => {
+  const updateCategory = async (id: string, updates: Partial<Category>) => {
     try {
-      setLoading(true);
-      const { data, error } = await supabase
-        .from('transactions')
-        .select(`
-          *,
-          category:categories(*)
-        `)
-        .order('date', { ascending: false });
-
-      if (error) throw error;
-
-      const formattedTransactions = (data || []).map(t => ({
-        id: t.id,
-        type: t.type,
-        amount: parseFloat(t.amount),
-        description: t.description,
-        date: t.date,
-        category: t.category,
-        user: { name: user?.name || '', email: user?.email || '' }
-      }));
-
-      setTransactions(formattedTransactions);
-    } catch (error) {
-      console.error('Error loading transactions:', error);
-      toast.error('Erro ao carregar transações');
-    } finally {
-      setLoading(false);
+      const updatedCategory = await categoryService.update(id, updates);
+      setCategories(categories.map(cat => cat.id === id ? updatedCategory : cat));
+      toast.success('Categoria atualizada!');
+    } catch (error: any) {
+      const message = error.response?.data?.error || 'Erro ao atualizar categoria';
+      toast.error(message);
+      throw error;
     }
   };
 
-  // Category methods
-  const addCategory = (categoryData: Omit<Category, 'id'>) => {
-    return new Promise(async (resolve, reject) => {
-      try {
-      // Input validation
-      if (!categoryData.name || categoryData.name.length < 1 || categoryData.name.length > 100) {
-        toast.error('Nome da categoria deve ter entre 1 e 100 caracteres');
-        return reject(new Error('Invalid name'));
-      }
-      
-      if (!['INCOME', 'EXPENSE'].includes(categoryData.type)) {
-        toast.error('Tipo de categoria inválido');
-        return reject(new Error('Invalid type'));
-      }
-
-      const sanitizedName = sanitizeInput(categoryData.name);
-      
-        const { data, error } = await supabase
-          .from('categories')
-          .insert({
-            user_id: user?.id,
-            name: sanitizedName,
-            type: categoryData.type,
-            color: categoryData.color || '#6B7280'
-          })
-          .select()
-          .single();
-
-        if (error) throw error;
-        const newCategory = data;
-        setCategories(prev => [...prev, newCategory]);
-        toast.success('Categoria criada com sucesso');
-        resolve(newCategory);
-      } catch (error: any) {
-        console.error('Error adding category:', error);
-        const message = error.response?.data?.error || 'Erro ao criar categoria';
-        toast.error(message);
-        reject(error);
-      }
-    });
+  const deleteCategory = async (id: string) => {
+    try {
+      await categoryService.delete(id);
+      setCategories(categories.filter(cat => cat.id !== id));
+      toast.success('Categoria excluída!');
+    } catch (error: any) {
+      const message = error.response?.data?.error || 'Erro ao excluir categoria';
+      toast.error(message);
+      throw error;
+    }
   };
 
-  const updateCategory = (id: string, categoryData: Omit<Category, 'id'>) => {
-    return new Promise(async (resolve, reject) => {
-      try {
-      // Input validation
-      if (!categoryData.name || categoryData.name.length < 1 || categoryData.name.length > 100) {
-        toast.error('Nome da categoria deve ter entre 1 e 100 caracteres');
-        return reject(new Error('Invalid name'));
-      }
-      
-      const sanitizedName = sanitizeInput(categoryData.name);
-      
-        const { data, error } = await supabase
-          .from('categories')
-          .update({
-            name: sanitizedName,
-            type: categoryData.type,
-            color: categoryData.color,
-            updated_at: new Date().toISOString()
-          })
-          .eq('id', id)
-          .select()
-          .single();
-
-        if (error) throw error;
-        const updatedCategory = data;
-        setCategories(prev => prev.map(cat => 
-          cat.id === id ? updatedCategory : cat
-        ));
-        
-        // Reload transactions to get updated category info
-        await loadTransactions();
-        
-        toast.success('Categoria atualizada com sucesso');
-        resolve(updatedCategory);
-      } catch (error: any) {
-        console.error('Error updating category:', error);
-        const message = error.response?.data?.error || 'Erro ao atualizar categoria';
-        toast.error(message);
-        reject(error);
-      }
-    });
+  const addTransaction = async (transactionData: Omit<Transaction, 'id' | 'userId' | 'createdAt' | 'updatedAt' | 'category'>) => {
+    try {
+      const newTransaction = await transactionService.create(transactionData);
+      setTransactions([newTransaction, ...transactions]);
+      toast.success('Transação criada com sucesso!');
+    } catch (error: any) {
+      const message = error.response?.data?.error || 'Erro ao criar transação';
+      toast.error(message);
+      throw error;
+    }
   };
 
-  const deleteCategory = (id: string) => {
-    return new Promise(async (resolve, reject) => {
-      try {
-        const { error } = await supabase
-          .from('categories')
-          .delete()
-          .eq('id', id);
-
-        if (error) throw error;
-        setCategories(prev => prev.filter(cat => cat.id !== id));
-        toast.success('Categoria excluída com sucesso');
-        resolve(true);
-      } catch (error: any) {
-        console.error('Error deleting category:', error);
-        const message = error.response?.data?.error || 'Erro ao excluir categoria';
-        toast.error(message);
-        reject(error);
-      }
-    });
+  const updateTransaction = async (id: string, updates: Partial<Transaction>) => {
+    try {
+      const updatedTransaction = await transactionService.update(id, updates);
+      setTransactions(transactions.map(t => t.id === id ? updatedTransaction : t));
+      toast.success('Transação atualizada!');
+    } catch (error: any) {
+      const message = error.response?.data?.error || 'Erro ao atualizar transação';
+      toast.error(message);
+      throw error;
+    }
   };
 
-  // Transaction methods
-  const addTransaction = (transactionData: Omit<Transaction, 'id' | 'category' | 'user'> & { categoryId: string }) => {
-    return new Promise(async (resolve, reject) => {
-      try {
-      // Input validation
-      if (!validateAmount(transactionData.amount)) {
-        toast.error('Valor deve ser um número positivo válido');
-        return reject(new Error('Invalid amount'));
-      }
-      
-      if (!validateDate(transactionData.date)) {
-        toast.error('Data inválida');
-        return reject(new Error('Invalid date'));
-      }
-      
-      if (!['INCOME', 'EXPENSE'].includes(transactionData.type)) {
-        toast.error('Tipo de transação inválido');
-        return reject(new Error('Invalid type'));
-      }
-
-      const sanitizedDescription = transactionData.description ? 
-        sanitizeInput(transactionData.description).substring(0, 500) : undefined;
-
-        const { data, error } = await supabase
-          .from('transactions')
-          .insert({
-            user_id: user?.id,
-            category_id: transactionData.categoryId,
-            type: transactionData.type,
-            amount: transactionData.amount,
-            description: sanitizedDescription,
-            date: transactionData.date
-          })
-          .select(`
-            *,
-            category:categories(*)
-          `)
-          .single();
-
-        if (error) throw error;
-
-        const newTransaction = {
-          id: data.id,
-          type: data.type,
-          amount: parseFloat(data.amount),
-          description: data.description,
-          date: data.date,
-          category: data.category,
-          user: { name: user?.name || '', email: user?.email || '' }
-        };
-        setTransactions(prev => [newTransaction, ...prev]);
-        toast.success('Transação criada com sucesso');
-        resolve(newTransaction);
-      } catch (error: any) {
-        console.error('Error adding transaction:', error);
-        const message = error.response?.data?.error || 'Erro ao criar transação';
-        toast.error(message);
-        reject(error);
-      }
-    });
-  };
-
-  const updateTransaction = (id: string, transactionData: Omit<Transaction, 'id' | 'category' | 'user'> & { categoryId: string }) => {
-    return new Promise(async (resolve, reject) => {
-      try {
-      // Input validation
-      if (!validateAmount(transactionData.amount)) {
-        toast.error('Valor deve ser um número positivo válido');
-        return reject(new Error('Invalid amount'));
-      }
-      
-      if (!validateDate(transactionData.date)) {
-        toast.error('Data inválida');
-        return reject(new Error('Invalid date'));
-      }
-
-      const sanitizedDescription = transactionData.description ? 
-        sanitizeInput(transactionData.description).substring(0, 500) : undefined;
-
-        const { data, error } = await supabase
-          .from('transactions')
-          .update({
-            category_id: transactionData.categoryId,
-            type: transactionData.type,
-            amount: transactionData.amount,
-            description: sanitizedDescription,
-            date: transactionData.date,
-            updated_at: new Date().toISOString()
-          })
-          .eq('id', id)
-          .select(`
-            *,
-            category:categories(*)
-          `)
-          .single();
-
-        if (error) throw error;
-
-        const updatedTransaction = {
-          id: data.id,
-          type: data.type,
-          amount: parseFloat(data.amount),
-          description: data.description,
-          date: data.date,
-          category: data.category,
-          user: { name: user?.name || '', email: user?.email || '' }
-        };
-        setTransactions(prev => prev.map(transaction => 
-          transaction.id === id ? updatedTransaction : transaction
-        ));
-        
-        toast.success('Transação atualizada com sucesso');
-        resolve(updatedTransaction);
-      } catch (error: any) {
-        console.error('Error updating transaction:', error);
-        const message = error.response?.data?.error || 'Erro ao atualizar transação';
-        toast.error(message);
-        reject(error);
-      }
-    });
-  };
-
-  const deleteTransaction = (id: string) => {
-    return new Promise(async (resolve, reject) => {
-      try {
-        const { error } = await supabase
-          .from('transactions')
-          .delete()
-          .eq('id', id);
-
-        if (error) throw error;
-        setTransactions(prev => prev.filter(t => t.id !== id));
-        toast.success('Transação excluída com sucesso');
-        resolve(true);
-      } catch (error: any) {
-        console.error('Error deleting transaction:', error);
-        const message = error.response?.data?.error || 'Erro ao excluir transação';
-        toast.error(message);
-        reject(error);
-      }
-    });
+  const deleteTransaction = async (id: string) => {
+    try {
+      await transactionService.delete(id);
+      setTransactions(transactions.filter(t => t.id !== id));
+      toast.success('Transação excluída!');
+    } catch (error: any) {
+      const message = error.response?.data?.error || 'Erro ao excluir transação';
+      toast.error(message);
+      throw error;
+    }
   };
 
   const value = {
     categories,
     transactions,
     loading,
-    user,
+    refreshCategories,
+    refreshTransactions,
     addCategory,
     updateCategory,
     deleteCategory,
     addTransaction,
     updateTransaction,
-    deleteTransaction
+    deleteTransaction,
   };
 
   return <DataContext.Provider value={value}>{children}</DataContext.Provider>;

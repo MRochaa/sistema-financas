@@ -1,7 +1,6 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import toast from 'react-hot-toast';
-import { supabase } from '../lib/supabase';
-import type { User as SupabaseUser } from '@supabase/supabase-js';
+import { authService } from '../services/api';
 
 interface User {
   id: string;
@@ -32,54 +31,36 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session?.user) {
-        setUser({
-          id: session.user.id,
-          email: session.user.email!,
-          name: session.user.user_metadata?.name || session.user.email!.split('@')[0]
-        });
-      }
-      setLoading(false);
-    });
+    // Verifica se há token e usuário salvos
+    const initAuth = async () => {
+      const token = localStorage.getItem('auth_token');
+      const savedUser = localStorage.getItem('user');
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      (() => {
-        if (session?.user) {
-          setUser({
-            id: session.user.id,
-            email: session.user.email!,
-            name: session.user.user_metadata?.name || session.user.email!.split('@')[0]
-          });
-        } else {
+      if (token && savedUser) {
+        try {
+          // Valida o token buscando dados do usuário
+          const userData = await authService.getMe();
+          setUser(userData);
+        } catch (error) {
+          // Token inválido ou expirado
+          localStorage.removeItem('auth_token');
+          localStorage.removeItem('user');
           setUser(null);
         }
-      })();
-    });
+      }
+      setLoading(false);
+    };
 
-    return () => subscription.unsubscribe();
+    initAuth();
   }, []);
 
   const login = async (email: string, password: string) => {
     try {
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email,
-        password
-      });
-
-      if (error) throw error;
-
-      if (data.user) {
-        const userData = {
-          id: data.user.id,
-          email: data.user.email!,
-          name: data.user.user_metadata?.name || data.user.email!.split('@')[0]
-        };
-        setUser(userData);
-        toast.success(`Bem-vindo, ${userData.name}!`);
-      }
+      const data = await authService.login(email, password);
+      setUser(data.user);
+      toast.success(`Bem-vindo, ${data.user.name}!`);
     } catch (error: any) {
-      const message = error.message || 'Erro ao fazer login';
+      const message = error.response?.data?.error || 'Erro ao fazer login';
       toast.error(message);
       throw error;
     }
@@ -87,44 +68,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const register = async (email: string, password: string, name: string) => {
     try {
-      const { data, error } = await supabase.auth.signUp({
-        email,
-        password,
-        options: {
-          data: {
-            name
-          }
-        }
-      });
-
-      if (error) throw error;
-
-      if (data.user) {
-        const userData = {
-          id: data.user.id,
-          email: data.user.email!,
-          name: name
-        };
-        setUser(userData);
-        toast.success(`Conta criada com sucesso! Bem-vindo, ${userData.name}!`);
-      }
+      const data = await authService.register(email, password, name);
+      setUser(data.user);
+      toast.success(`Conta criada com sucesso! Bem-vindo, ${data.user.name}!`);
     } catch (error: any) {
-      const message = error.message || 'Erro ao criar conta';
+      const message = error.response?.data?.error || 'Erro ao criar conta';
       toast.error(message);
       throw error;
     }
   };
 
-  const logout = async () => {
-    try {
-      await supabase.auth.signOut();
-      setUser(null);
-      toast.success('Logout realizado com sucesso');
-    } catch (error) {
-      console.error('Error during logout:', error);
-      setUser(null);
-      toast.success('Logout realizado com sucesso');
-    }
+  const logout = () => {
+    authService.logout();
+    setUser(null);
+    toast.success('Logout realizado com sucesso');
   };
 
   const value = {
