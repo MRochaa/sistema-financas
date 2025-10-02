@@ -57,8 +57,8 @@ const Categories: React.FC = () => {
   };
 
   const groupedCategories = {
-    INCOME: categories.filter(cat => cat.type === 'INCOME'),
-    EXPENSE: categories.filter(cat => cat.type === 'EXPENSE')
+    INCOME: categories.filter(cat => cat && cat.type === 'INCOME'),
+    EXPENSE: categories.filter(cat => cat && cat.type === 'EXPENSE')
   };
 
   return (

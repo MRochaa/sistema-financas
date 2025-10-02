@@ -60,7 +60,12 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (!user) return;
     try {
       const data = await categoryService.getAll();
-      setCategories(data);
+      console.log('Categories received:', data);
+      // Filter out any invalid categories
+      const validCategories = (data || []).filter(cat =>
+        cat && cat.id && cat.type && ['INCOME', 'EXPENSE'].includes(cat.type)
+      );
+      setCategories(validCategories);
     } catch (error: any) {
       console.error('Error fetching categories:', error);
       toast.error('Erro ao carregar categorias');
@@ -97,9 +102,18 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const addCategory = async (categoryData: Omit<Category, 'id' | 'userId' | 'createdAt' | 'updatedAt'>) => {
     try {
       const newCategory = await categoryService.create(categoryData);
-      setCategories([...categories, newCategory]);
-      toast.success('Categoria criada com sucesso!');
+      console.log('New category created:', newCategory);
+
+      // Validate the new category before adding
+      if (newCategory && newCategory.id && newCategory.type) {
+        setCategories([...categories, newCategory]);
+        toast.success('Categoria criada com sucesso!');
+      } else {
+        console.error('Invalid category data:', newCategory);
+        toast.error('Erro: Dados da categoria inválidos');
+      }
     } catch (error: any) {
+      console.error('Error creating category:', error);
       const message = error.response?.data?.error || 'Erro ao criar categoria';
       toast.error(message);
       throw error;
