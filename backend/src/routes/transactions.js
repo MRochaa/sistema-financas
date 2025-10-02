@@ -22,11 +22,14 @@ router.get('/', auth, async (req, res) => {
       ORDER BY t.date DESC
     `).all(req.userId);
 
-    const parsedTransactions = transactions.map(t => ({
-      ...t,
-      type: t.type.toUpperCase(),
-      categories: JSON.parse(t.categories)
-    }));
+    const parsedTransactions = transactions.map(t => {
+      const category = JSON.parse(t.categories);
+      return {
+        ...t,
+        type: t.type.toUpperCase(),
+        categories: category ? { ...category, type: category.type.toUpperCase() } : null
+      };
+    });
 
     res.json(parsedTransactions || []);
   } catch (error) {
@@ -70,10 +73,11 @@ router.post('/', auth, async (req, res) => {
       WHERE t.id = ?
     `).get(transactionId);
 
+    const category = JSON.parse(transaction.categories);
     const parsedTransaction = {
       ...transaction,
       type: transaction.type.toUpperCase(),
-      categories: JSON.parse(transaction.categories)
+      categories: category ? { ...category, type: category.type.toUpperCase() } : null
     };
 
     res.status(201).json(parsedTransaction);
@@ -122,10 +126,11 @@ router.put('/:id', auth, async (req, res) => {
       WHERE t.id = ?
     `).get(req.params.id);
 
+    const category = JSON.parse(transaction.categories);
     const parsedTransaction = {
       ...transaction,
       type: transaction.type.toUpperCase(),
-      categories: JSON.parse(transaction.categories)
+      categories: category ? { ...category, type: category.type.toUpperCase() } : null
     };
 
     res.json(parsedTransaction);
