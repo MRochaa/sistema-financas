@@ -72,17 +72,17 @@ export const authService = {
 export const categoryService = {
   async getAll() {
     const response = await api.get('/categories');
-    return response.data.categories || [];
+    return response.data || [];
   },
 
   async create(data: { name: string; type: 'INCOME' | 'EXPENSE'; color: string }) {
     const response = await api.post('/categories', data);
-    return response.data.category;
+    return response.data;
   },
 
   async update(id: string, data: { name?: string; color?: string }) {
     const response = await api.put(`/categories/${id}`, data);
-    return response.data.category;
+    return response.data;
   },
 
   async delete(id: string) {
@@ -101,7 +101,7 @@ export const transactionService = {
     limit?: number;
   }) {
     const response = await api.get('/transactions', { params: filters });
-    return response.data.transactions || [];
+    return response.data || [];
   },
 
   async create(data: {
@@ -112,12 +112,12 @@ export const transactionService = {
     categoryId: string;
   }) {
     const response = await api.post('/transactions', data);
-    return response.data.transaction;
+    return response.data;
   },
 
   async update(id: string, data: any) {
     const response = await api.put(`/transactions/${id}`, data);
-    return response.data.transaction;
+    return response.data;
   },
 
   async delete(id: string) {
