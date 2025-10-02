@@ -75,8 +75,8 @@ const Savings: React.FC = () => {
       const savingsAccount = savingsAccounts.find(acc => acc.categoryId === category.id);
       if (!savingsAccount) return;
 
-      const relatedTransactions = transactions.filter(t => 
-        t.category.id === category.id && t.type === 'EXPENSE'
+      const relatedTransactions = transactions.filter(t =>
+        t.category?.id === category.id && t.type === 'EXPENSE'
       );
 
       relatedTransactions.forEach(transaction => {

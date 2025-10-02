@@ -88,7 +88,7 @@ const Transactions: React.FC = () => {
       amount: transaction.amount.toString(),
       description: transaction.description || '',
       date: new Date(transaction.date).toISOString().split('T')[0],
-      categoryId: transaction.category.id,
+      categoryId: transaction.category?.id || '',
       recurrenceType: 'SINGLE',
       recurrenceInterval: 'MONTHLY',
       endDate: '',

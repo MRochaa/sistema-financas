@@ -152,9 +152,9 @@ const Dashboard: React.FC = () => {
 
     // Category breakdown
     const categoryBreakdown = categories.map(category => {
-      const categoryTransactions = filteredTransactions.filter(t => t.category.id === category.id);
+      const categoryTransactions = filteredTransactions.filter(t => t.category?.id === category.id);
       const amount = categoryTransactions.reduce((sum, t) => sum + t.amount, 0);
-      
+
       return {
         categoryId: category.id,
         _sum: { amount },
@@ -530,7 +530,7 @@ const Dashboard: React.FC = () => {
                       {item._count.id}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                      <span className={item.category.type === 'INCOME' ? 'text-green-600' : 'text-red-600'}>
+                      <span className={item.category?.type === 'INCOME' ? 'text-green-600' : 'text-red-600'}>
                         {formatCurrency(item._sum.amount)}
                       </span>
                     </td>

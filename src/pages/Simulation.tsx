@@ -100,7 +100,7 @@ const Simulation: React.FC = () => {
           type: transaction.type,
           amount: transaction.amount,
           description: transaction.description || 'Sem descrição',
-          categoryId: transaction.category.id,
+          categoryId: transaction.category?.id || '',
           date: transaction.date,
           isSimulated: false
         });
