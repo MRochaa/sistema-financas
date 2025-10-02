@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Line, Bar } from 'react-chartjs-2';
 import {
   Chart as ChartJS,
@@ -12,6 +12,9 @@ import {
   Legend,
 } from 'chart.js';
 import { TrendingUp, TrendingDown, Calculator, Calendar } from 'lucide-react';
+import { useData } from '../contexts/DataContext';
+import { startOfMonth, subMonths, format, addMonths } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
 
 ChartJS.register(
   CategoryScale,
@@ -24,26 +27,59 @@ ChartJS.register(
   Legend
 );
 
-// Mock data for demo
-const mockProjectionData = {
-  averages: {
-    income: 8400.00,
-    expenses: 6100.00,
-    balance: 2300.00
-  },
-  projections: [
-    { month: 'Jan/25', projectedIncome: 8400, projectedExpenses: 6100, projectedBalance: 2300 },
-    { month: 'Fev/25', projectedIncome: 8400, projectedExpenses: 6100, projectedBalance: 2300 },
-    { month: 'Mar/25', projectedIncome: 8400, projectedExpenses: 6100, projectedBalance: 2300 },
-    { month: 'Abr/25', projectedIncome: 8400, projectedExpenses: 6100, projectedBalance: 2300 },
-    { month: 'Mai/25', projectedIncome: 8400, projectedExpenses: 6100, projectedBalance: 2300 },
-    { month: 'Jun/25', projectedIncome: 8400, projectedExpenses: 6100, projectedBalance: 2300 },
-  ]
-};
-
 const Reports: React.FC = () => {
-  const [projectionData] = useState(mockProjectionData);
-  const [loading] = useState(false);
+  const { transactions, loading } = useData();
+
+  // Calculate averages from last 3 months of actual data
+  const averagesData = useMemo(() => {
+    const now = new Date();
+    const threeMonthsAgo = subMonths(now, 3);
+
+    const recentTransactions = transactions.filter(t => {
+      const transactionDate = new Date(t.date);
+      return transactionDate >= threeMonthsAgo && transactionDate <= now;
+    });
+
+    const totalIncome = recentTransactions
+      .filter(t => t.type === 'INCOME')
+      .reduce((sum, t) => sum + t.amount, 0);
+
+    const totalExpenses = recentTransactions
+      .filter(t => t.type === 'EXPENSE')
+      .reduce((sum, t) => sum + t.amount, 0);
+
+    const monthCount = Math.max(1, 3); // Always divide by 3 months
+    const avgIncome = totalIncome / monthCount;
+    const avgExpenses = totalExpenses / monthCount;
+    const avgBalance = avgIncome - avgExpenses;
+
+    return {
+      income: avgIncome,
+      expenses: avgExpenses,
+      balance: avgBalance
+    };
+  }, [transactions]);
+
+  // Generate projections for next 6 months based on averages
+  const projectionData = useMemo(() => {
+    const projections = [];
+    const now = new Date();
+
+    for (let i = 1; i <= 6; i++) {
+      const futureMonth = addMonths(now, i);
+      projections.push({
+        month: format(futureMonth, 'MMM/yy', { locale: ptBR }),
+        projectedIncome: averagesData.income,
+        projectedExpenses: averagesData.expenses,
+        projectedBalance: averagesData.balance
+      });
+    }
+
+    return {
+      averages: averagesData,
+      projections
+    };
+  }, [averagesData]);
 
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat('pt-BR', {

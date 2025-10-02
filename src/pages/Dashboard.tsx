@@ -225,15 +225,15 @@ const Dashboard: React.FC = () => {
   };
 
   const expenseCategories = dashboardData.categoryBreakdown.filter(
-    item => item.category.type === 'EXPENSE'
+    item => item.category && item.category.type === 'EXPENSE'
   );
 
   const doughnutChartData = {
-    labels: expenseCategories.map(item => item.category.name),
+    labels: expenseCategories.map(item => item.category?.name || 'Sem categoria'),
     datasets: [
       {
         data: expenseCategories.map(item => item._sum.amount),
-        backgroundColor: expenseCategories.map(item => item.category.color),
+        backgroundColor: expenseCategories.map(item => item.category?.color || '#cccccc'),
         borderWidth: 2,
         borderColor: '#fff',
       },
@@ -500,22 +500,30 @@ const Dashboard: React.FC = () => {
                   <tr key={item.categoryId}>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="flex items-center">
-                        <div
-                          className="w-4 h-4 rounded-full mr-3"
-                          style={{ backgroundColor: item.category.color }}
-                        ></div>
-                        <div className="text-sm font-medium text-gray-900">
-                          {item.category.name}
-                        </div>
+                        {item.category ? (
+                          <>
+                            <div
+                              className="w-4 h-4 rounded-full mr-3"
+                              style={{ backgroundColor: item.category.color }}
+                            ></div>
+                            <div className="text-sm font-medium text-gray-900">
+                              {item.category.name}
+                            </div>
+                          </>
+                        ) : (
+                          <div className="text-sm font-medium text-gray-400">
+                            Sem categoria
+                          </div>
+                        )}
                       </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                        item.category.type === 'INCOME' 
+                        item.category?.type === 'INCOME'
                           ? 'bg-green-100 text-green-800'
                           : 'bg-red-100 text-red-800'
                       }`}>
-                        {item.category.type === 'INCOME' ? 'Receita' : 'Despesa'}
+                        {item.category?.type === 'INCOME' ? 'Receita' : 'Despesa'}
                       </span>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">

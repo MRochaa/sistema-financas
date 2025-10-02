@@ -1,167 +1,160 @@
 import express from 'express';
-import { PrismaClient } from '@prisma/client';
-import { authenticateToken } from '../middleware/auth.js';
-import { validateRequest, transactionSchema } from '../middleware/validation.js';
+import db, { dbHelpers } from '../database/sqlite.js';
+import auth from '../middleware/auth.js';
 
 const router = express.Router();
-const prisma = new PrismaClient();
 
-
-// Get transactions with pagination and filters
-router.get('/', authenticateToken, async (req, res, next) => {
+router.get('/', auth, async (req, res) => {
   try {
-    const { 
-      page = 1, 
-      limit = 10, 
-      type, 
-      categoryId, 
-      startDate, 
-      endDate 
-    } = req.query;
+    const transactions = db.prepare(`
+      SELECT
+        t.*,
+        json_object(
+          'id', c.id,
+          'name', c.name,
+          'type', c.type,
+          'color', c.color,
+          'icon', c.icon
+        ) as categories
+      FROM transactions t
+      LEFT JOIN categories c ON t.category_id = c.id
+      WHERE t.user_id = ?
+      ORDER BY t.date DESC
+    `).all(req.userId);
 
-    const skip = (parseInt(page) - 1) * parseInt(limit);
-    
-    const where = {
-      userId: req.user.id,
-      ...(type && { type }),
-      ...(categoryId && { categoryId }),
-      ...(startDate && endDate && {
-        date: {
-          gte: new Date(startDate),
-          lte: new Date(endDate)
-        }
-      })
+    const parsedTransactions = transactions.map(t => {
+      const categoryData = JSON.parse(t.categories);
+      const { categories, ...transaction } = t;
+      return {
+        ...transaction,
+        type: t.type.toUpperCase(),
+        category: categoryData && categoryData.id ? { ...categoryData, type: categoryData.type.toUpperCase() } : null
+      };
+    });
+
+    res.json(parsedTransactions || []);
+  } catch (error) {
+    console.error('Get transactions error:', error);
+    res.status(500).json({ error: 'Error fetching transactions' });
+  }
+});
+
+router.post('/', auth, async (req, res) => {
+  try {
+    const { type, amount, description, date, category_id } = req.body;
+
+    // Normalize type to lowercase for database
+    const normalizedType = type?.toLowerCase();
+
+    // Validate type
+    if (!normalizedType || !['income', 'expense'].includes(normalizedType)) {
+      return res.status(400).json({ error: 'Invalid transaction type. Must be "income" or "expense"' });
+    }
+
+    const transactionId = dbHelpers.generateId();
+    const now = dbHelpers.now();
+
+    db.prepare(`
+      INSERT INTO transactions (id, user_id, category_id, description, amount, type, date, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(transactionId, req.userId, category_id, description, amount, normalizedType, date, now, now);
+
+    const transaction = db.prepare(`
+      SELECT
+        t.*,
+        json_object(
+          'id', c.id,
+          'name', c.name,
+          'type', c.type,
+          'color', c.color,
+          'icon', c.icon
+        ) as categories
+      FROM transactions t
+      LEFT JOIN categories c ON t.category_id = c.id
+      WHERE t.id = ?
+    `).get(transactionId);
+
+    const categoryData = JSON.parse(transaction.categories);
+    const { categories, ...transactionData } = transaction;
+    const parsedTransaction = {
+      ...transactionData,
+      type: transaction.type.toUpperCase(),
+      category: categoryData && categoryData.id ? { ...categoryData, type: categoryData.type.toUpperCase() } : null
     };
 
-    const [transactions, total] = await Promise.all([
-      prisma.transaction.findMany({
-        where,
-        include: {
-          category: true,
-          user: {
-            select: { name: true, email: true }
-          }
-        },
-        orderBy: { date: 'desc' },
-        skip,
-        take: parseInt(limit)
-      }),
-      prisma.transaction.count({ where })
-    ]);
-
-    res.json({
-      transactions,
-      pagination: {
-        page: parseInt(page),
-        limit: parseInt(limit),
-        total,
-        pages: Math.ceil(total / parseInt(limit))
-      }
-    });
+    res.status(201).json(parsedTransaction);
   } catch (error) {
-    next(error);
+    console.error('Create transaction error:', error);
+    res.status(500).json({ error: 'Error creating transaction' });
   }
 });
 
-// Get single transaction
-router.get('/:id', authenticateToken, async (req, res, next) => {
+router.put('/:id', auth, async (req, res) => {
   try {
-    const { id } = req.params;
-    
-    const transaction = await prisma.transaction.findFirst({
-      where: { id, userId: req.user.id },
-      include: { category: true }
-    });
+    const { type, amount, description, date, category_id } = req.body;
 
-    if (!transaction) {
+    // Normalize type to lowercase for database
+    const normalizedType = type?.toLowerCase();
+
+    // Validate type
+    if (!normalizedType || !['income', 'expense'].includes(normalizedType)) {
+      return res.status(400).json({ error: 'Invalid transaction type. Must be "income" or "expense"' });
+    }
+
+    const now = dbHelpers.now();
+
+    const result = db.prepare(`
+      UPDATE transactions
+      SET type = ?, amount = ?, description = ?, date = ?, category_id = ?, updated_at = ?
+      WHERE id = ? AND user_id = ?
+    `).run(normalizedType, amount, description, date, category_id, now, req.params.id, req.userId);
+
+    if (result.changes === 0) {
       return res.status(404).json({ error: 'Transaction not found' });
     }
 
-    res.json(transaction);
+    const transaction = db.prepare(`
+      SELECT
+        t.*,
+        json_object(
+          'id', c.id,
+          'name', c.name,
+          'type', c.type,
+          'color', c.color,
+          'icon', c.icon
+        ) as categories
+      FROM transactions t
+      LEFT JOIN categories c ON t.category_id = c.id
+      WHERE t.id = ?
+    `).get(req.params.id);
+
+    const categoryData = JSON.parse(transaction.categories);
+    const { categories, ...transactionData } = transaction;
+    const parsedTransaction = {
+      ...transactionData,
+      type: transaction.type.toUpperCase(),
+      category: categoryData && categoryData.id ? { ...categoryData, type: categoryData.type.toUpperCase() } : null
+    };
+
+    res.json(parsedTransaction);
   } catch (error) {
-    next(error);
+    console.error('Update transaction error:', error);
+    res.status(500).json({ error: 'Error updating transaction' });
   }
 });
 
-// Create transaction
-router.post('/', authenticateToken, validateRequest(transactionSchema), async (req, res, next) => {
+router.delete('/:id', auth, async (req, res) => {
   try {
-    const data = { ...req.body, date: new Date(req.body.date) };
-    
-    // Verify category belongs to user or is public
-    const category = await prisma.category.findUnique({
-      where: { id: data.categoryId }
-    });
-    
-    if (!category) {
-      return res.status(404).json({ error: 'Category not found' });
-    }
-    
-    const transaction = await prisma.transaction.create({
-      data: {
-        ...data,
-        userId: req.user.id
-      },
-      include: { category: true }
-    });
-    
-    res.status(201).json(transaction);
-  } catch (error) {
-    next(error);
-  }
-});
+    const result = db.prepare('DELETE FROM transactions WHERE id = ? AND user_id = ?').run(req.params.id, req.userId);
 
-// Update transaction
-router.put('/:id', authenticateToken, validateRequest(transactionSchema), async (req, res, next) => {
-  try {
-    const { id } = req.params;
-    const data = { ...req.body, date: new Date(req.body.date) };
-    
-    // Verify category exists
-    const category = await prisma.category.findUnique({
-      where: { id: data.categoryId }
-    });
-    
-    if (!category) {
-      return res.status(404).json({ error: 'Category not found' });
-    }
-    
-    const transaction = await prisma.transaction.updateMany({
-      where: { id, userId: req.user.id },
-      data
-    });
-
-    if (transaction.count === 0) {
+    if (result.changes === 0) {
       return res.status(404).json({ error: 'Transaction not found' });
     }
 
-    const updatedTransaction = await prisma.transaction.findFirst({
-      where: { id },
-      include: { category: true }
-    });
-    
-    res.json(updatedTransaction);
+    res.json({ message: 'Transaction deleted successfully' });
   } catch (error) {
-    next(error);
-  }
-});
-
-// Delete transaction
-router.delete('/:id', authenticateToken, async (req, res, next) => {
-  try {
-    const { id } = req.params;
-    
-    const deleted = await prisma.transaction.deleteMany({
-      where: { id, userId: req.user.id }
-    });
-
-    if (deleted.count === 0) {
-      return res.status(404).json({ error: 'Transaction not found' });
-    }
-    
-    res.status(204).send();
-  } catch (error) {
-    next(error);
+    console.error('Delete transaction error:', error);
+    res.status(500).json({ error: 'Error deleting transaction' });
   }
 });
 

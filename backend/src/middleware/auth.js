@@ -1,40 +1,40 @@
 import jwt from 'jsonwebtoken';
-import { PrismaClient } from '@prisma/client';
 
-const prisma = new PrismaClient();
-
-export const authenticateToken = async (req, res, next) => {
+const auth = (req, res, next) => {
   try {
-    const authHeader = req.headers.authorization;
-    const token = authHeader && authHeader.split(' ')[1];
+    const authHeader = req.header('Authorization');
 
-    if (!token) {
-      return res.status(401).json({ error: 'Access token required' });
+    if (!authHeader) {
+      return res.status(401).json({ error: 'No token, authorization denied' });
     }
 
-    const decoded = jwt.verify(token, process.env.JWT_SECRET, {
-      issuer: 'financas-lar',
-      audience: 'financas-lar-users'
-    });
-    
-    const user = await prisma.user.findUnique({
-      where: { id: decoded.userId },
-      select: { id: true, email: true, name: true }
-    });
+    if (!authHeader.startsWith('Bearer ')) {
+      return res.status(401).json({ error: 'Invalid token format' });
+    }
 
-    if (!user) {
+    const token = authHeader.substring(7);
+
+    if (!token) {
+      return res.status(401).json({ error: 'No token, authorization denied' });
+    }
+
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    req.userId = decoded.userId;
+
+    next();
+  } catch (error) {
+    console.error('Auth middleware error:', error);
+
+    if (error.name === 'JsonWebTokenError') {
       return res.status(401).json({ error: 'Invalid token' });
     }
 
-    req.user = user;
-    next();
-  } catch (error) {
     if (error.name === 'TokenExpiredError') {
       return res.status(401).json({ error: 'Token expired' });
     }
-    if (error.name === 'JsonWebTokenError') {
-      return res.status(403).json({ error: 'Invalid token format' });
-    }
-    return res.status(403).json({ error: 'Invalid token' });
+
+    res.status(500).json({ error: 'Server error in authentication' });
   }
 };
+
+export default auth;

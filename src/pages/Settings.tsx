@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Edit, Trash2, Settings as SettingsIcon, User, Users, Save, Eye, EyeOff, Shield, Mail, Lock } from 'lucide-react';
+import { Plus, CreditCard as Edit, Trash2, Settings as SettingsIcon, User, Users, Save, Eye, EyeOff, Shield, Mail, Lock } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
+import { authService } from '../services/api';
 import toast from 'react-hot-toast';
 
 interface LinkedUser {
@@ -93,44 +94,53 @@ const Settings: React.FC = () => {
     }));
   };
 
-  const handleCreateUser = (e: React.FormEvent) => {
+  const handleCreateUser = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     // Validations
     if (userFormData.password !== userFormData.confirmPassword) {
       toast.error('As senhas não coincidem');
       return;
     }
 
-    if (userFormData.password.length < 6) {
-      toast.error('A senha deve ter pelo menos 6 caracteres');
+    if (userFormData.password.length < 8) {
+      toast.error('A senha deve ter pelo menos 8 caracteres');
       return;
     }
 
-    // Check if email already exists
-    const emailExists = linkedUsers.some(u => u.email === userFormData.email) || 
+    // Check if email already exists locally
+    const emailExists = linkedUsers.some(u => u.email === userFormData.email) ||
                        user?.email === userFormData.email;
-    
+
     if (emailExists) {
       toast.error('Este e-mail já está em uso');
       return;
     }
 
-    const newUser: LinkedUser = {
-      id: Date.now().toString(),
-      name: userFormData.name,
-      email: userFormData.email,
-      role: userFormData.role,
-      isActive: true,
-      createdBy: user?.name || 'Admin',
-      createdAt: new Date().toISOString()
-    };
+    try {
+      // Create user in the backend
+      await authService.register(userFormData.email, userFormData.password, userFormData.name);
 
-    setLinkedUsers(prev => [...prev, newUser]);
-    setShowUserModal(false);
-    setEditingUser(null);
-    resetUserForm();
-    toast.success('Usuário criado com sucesso');
+      const newUser: LinkedUser = {
+        id: Date.now().toString(),
+        name: userFormData.name,
+        email: userFormData.email,
+        role: userFormData.role,
+        isActive: true,
+        createdBy: user?.name || 'Admin',
+        createdAt: new Date().toISOString()
+      };
+
+      setLinkedUsers(prev => [...prev, newUser]);
+      setShowUserModal(false);
+      setEditingUser(null);
+      resetUserForm();
+      toast.success('Usuário criado com sucesso! Agora ele pode fazer login.');
+    } catch (error: any) {
+      console.error('Error creating user:', error);
+      const message = error.response?.data?.error || 'Erro ao criar usuário';
+      toast.error(message);
+    }
   };
 
   const handleUpdateUser = (e: React.FormEvent) => {
@@ -210,8 +220,8 @@ const Settings: React.FC = () => {
       return;
     }
 
-    if (profileFormData.newPassword && profileFormData.newPassword.length < 6) {
-      toast.error('A nova senha deve ter pelo menos 6 caracteres');
+    if (profileFormData.newPassword && profileFormData.newPassword.length < 8) {
+      toast.error('A nova senha deve ter pelo menos 8 caracteres');
       return;
     }
 
@@ -348,7 +358,7 @@ const Settings: React.FC = () => {
                           className="w-full border border-gray-300 rounded-md px-3 py-2"
                           value={profileFormData.newPassword}
                           onChange={(e) => setProfileFormData({ ...profileFormData, newPassword: e.target.value })}
-                          placeholder="Nova senha (mín. 6 caracteres)"
+                          placeholder="Nova senha (mín. 8 caracteres)"
                         />
                       </div>
 
@@ -639,7 +649,7 @@ const Settings: React.FC = () => {
                           className="w-full border border-gray-300 rounded-md px-3 py-2 pr-10"
                           value={userFormData.password}
                           onChange={(e) => setUserFormData({ ...userFormData, password: e.target.value })}
-                          placeholder="Mínimo 6 caracteres"
+                          placeholder="Mínimo 8 caracteres"
                         />
                         <button
                           type="button"

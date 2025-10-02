@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { Plus, Edit, Trash2, Heart, ExternalLink, Check, X, GripVertical, ChevronDown, ChevronUp } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Plus, CreditCard as Edit, Trash2, Heart, ExternalLink, Check, X, GripVertical, ChevronDown, ChevronUp } from 'lucide-react';
 import { useData } from '../contexts/DataContext';
 
 interface WishlistItem {

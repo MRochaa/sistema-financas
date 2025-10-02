@@ -1,101 +1,96 @@
 import express from 'express';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
-import { PrismaClient } from '@prisma/client';
-import { authenticateToken } from '../middleware/auth.js';
-import { 
-  validateRequest, 
-  userRegistrationSchema, 
-  userLoginSchema,
-  createUserRateLimit 
-} from '../middleware/validation.js';
+import { body, validationResult } from 'express-validator';
+import db, { dbHelpers } from '../database/sqlite.js';
+import auth from '../middleware/auth.js';
 
 const router = express.Router();
-const prisma = new PrismaClient();
+const sanitizeInput = (input) => input.trim().replace(/[<>]/g, '');
 
-// Rate limiting for auth endpoints
-const authRateLimit = createUserRateLimit(15 * 60 * 1000, 5); // 5 attempts per 15 minutes
-
-// Register
-router.post('/register', authRateLimit, validateRequest(userRegistrationSchema), async (req, res, next) => {
+router.post('/register', [
+  body('email').isEmail().normalizeEmail(),
+  body('password').isLength({ min: 8, max: 128 }),
+  body('name').isLength({ min: 2, max: 100 })
+], async (req, res) => {
   try {
-    const { email, password, name } = req.body;
-
-    const existingUser = await prisma.user.findUnique({
-      where: { email }
-    });
-
-    if (existingUser) {
-      return res.status(409).json({ error: 'User already exists' });
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ error: 'Validation failed', details: errors.array() });
     }
 
-    const hashedPassword = await bcrypt.hash(password, parseInt(process.env.BCRYPT_ROUNDS) || 12);
+    const { email, password, name } = req.body;
+    const sanitizedEmail = sanitizeInput(email);
+    const sanitizedName = sanitizeInput(name);
 
-    const user = await prisma.user.create({
-      data: {
-        email,
-        password: hashedPassword,
-        name
-      },
-      select: { id: true, email: true, name: true }
+    const existingUser = db.prepare('SELECT id FROM users WHERE email = ?').get(sanitizedEmail);
+
+    if (existingUser) {
+      return res.status(400).json({ error: 'User already exists' });
+    }
+
+    const saltRounds = parseInt(process.env.BCRYPT_ROUNDS) || 12;
+    const hashedPassword = await bcrypt.hash(password, saltRounds);
+
+    const userId = dbHelpers.generateId();
+    const now = dbHelpers.now();
+
+    db.prepare(`
+      INSERT INTO users (id, email, name, password, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?)
+    `).run(userId, sanitizedEmail, sanitizedName, hashedPassword, now, now);
+
+    const token = jwt.sign({ userId }, process.env.JWT_SECRET, { expiresIn: process.env.JWT_EXPIRES_IN || '7d' });
+
+    res.status(201).json({
+      message: 'User registered successfully',
+      token,
+      user: { id: userId, email: sanitizedEmail, name: sanitizedName }
     });
-
-    const token = jwt.sign(
-      { userId: user.id },
-      process.env.JWT_SECRET,
-      { 
-        expiresIn: process.env.JWT_EXPIRES_IN || '7d',
-        issuer: 'financas-lar',
-        audience: 'financas-lar-users'
-      }
-    );
-
-    res.status(201).json({ user, token });
   } catch (error) {
-    next(error);
+    console.error('Register error:', error);
+    res.status(500).json({ error: 'Error registering user' });
   }
 });
 
-// Login
-router.post('/login', authRateLimit, validateRequest(userLoginSchema), async (req, res, next) => {
+router.post('/login', [
+  body('email').isEmail().normalizeEmail(),
+  body('password').notEmpty()
+], async (req, res) => {
   try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ error: 'Validation failed' });
+    }
+
     const { email, password } = req.body;
 
-    const user = await prisma.user.findUnique({
-      where: { email }
-    });
+    const user = db.prepare('SELECT * FROM users WHERE email = ?').get(email);
 
-    if (!user || !(await bcrypt.compare(password, user.password))) {
+    if (!user) {
       return res.status(401).json({ error: 'Invalid credentials' });
     }
 
-    const token = jwt.sign(
-      { userId: user.id },
-      process.env.JWT_SECRET,
-      { 
-        expiresIn: process.env.JWT_EXPIRES_IN || '7d',
-        issuer: 'financas-lar',
-        audience: 'financas-lar-users'
-      }
-    );
+    const isValidPassword = await bcrypt.compare(password, user.password);
+    if (!isValidPassword) {
+      return res.status(401).json({ error: 'Invalid credentials' });
+    }
 
-    res.json({ 
-      user: { id: user.id, email: user.email, name: user.name }, 
-      token 
+    const token = jwt.sign({ userId: user.id }, process.env.JWT_SECRET, { expiresIn: process.env.JWT_EXPIRES_IN || '7d' });
+
+    res.json({
+      token,
+      user: { id: user.id, email: user.email, name: user.name }
     });
   } catch (error) {
-    next(error);
+    console.error('Login error:', error);
+    res.status(500).json({ error: 'Error logging in' });
   }
 });
 
-// Get current user
-router.get('/me', authenticateToken, async (req, res, next) => {
+router.get('/me', auth, async (req, res) => {
   try {
-    // Fetch fresh user data from database
-    const user = await prisma.user.findUnique({
-      where: { id: req.user.id },
-      select: { id: true, email: true, name: true, createdAt: true, updatedAt: true }
-    });
+    const user = db.prepare('SELECT id, email, name, created_at FROM users WHERE id = ?').get(req.userId);
 
     if (!user) {
       return res.status(404).json({ error: 'User not found' });
@@ -103,7 +98,8 @@ router.get('/me', authenticateToken, async (req, res, next) => {
 
     res.json({ user });
   } catch (error) {
-    next(error);
+    console.error('Get user error:', error);
+    res.status(500).json({ error: 'Error fetching user' });
   }
 });
 

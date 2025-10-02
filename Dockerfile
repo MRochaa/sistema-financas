@@ -1,94 +1,51 @@
 # ============================================
-# ESTÁGIO 1: Build do Frontend
-# ============================================
-FROM node:20-alpine AS frontend-builder
-
-WORKDIR /app
-
-# Copia arquivos de dependências do frontend
-COPY frontend/package*.json ./frontend/
-
-# Instala TODAS as dependências (incluindo dev) para o build
-WORKDIR /app/frontend
-RUN npm install
-
-# Copia código fonte do frontend
-WORKDIR /app
-COPY frontend/ ./frontend/
-
-# Executa o build do frontend
-WORKDIR /app/frontend
-RUN npm run build
-
-# ============================================
-# ESTÁGIO 2: Build do Backend
-# ============================================
-FROM node:20-alpine AS backend-builder
-
-# Instala dependências do sistema necessárias para Prisma
-RUN apk add --no-cache openssl openssl-dev libc6-compat
-
-WORKDIR /app
-
-# Copia arquivos de dependências do backend
-COPY backend/package*.json ./
-
-# Instala todas as dependências
-RUN npm install
-
-# Copia código fonte do backend
-COPY backend/ ./
-
-# Gera o Prisma Client com os targets binários corretos
-RUN npx prisma generate
-
-# Remove devDependencies mantendo apenas produção
-RUN npm prune --production
-
-# ============================================
-# ESTÁGIO 3: Imagem Final de Produção
+# Dockerfile para Coolify com SQLite
 # ============================================
 FROM node:20-alpine
 
-# Instala nginx, openssl e ferramentas necessárias
+# Instala dependências necessárias para better-sqlite3
 RUN apk add --no-cache \
-    nginx \
-    bash \
     curl \
-    openssl \
-    libc6-compat \
-    && rm -rf /var/cache/apk/*
+    bash \
+    python3 \
+    make \
+    g++
 
-# Cria diretórios necessários com permissões corretas
-RUN mkdir -p /var/log/nginx /var/cache/nginx /var/run/nginx /usr/share/nginx/html \
-    && chown -R nginx:nginx /var/log/nginx /var/cache/nginx /var/run/nginx
+WORKDIR /app
 
-# Copia backend compilado com node_modules e prisma client gerado
-COPY --from=backend-builder /app /app/backend
+# ============================================
+# Build Frontend
+# ============================================
+COPY package*.json ./
+RUN npm install
 
-# Copia frontend compilado (apenas os arquivos estáticos gerados)
-COPY --from=frontend-builder /app/frontend/dist /usr/share/nginx/html
+COPY eslint.config.js tsconfig*.json vite.config.ts index.html postcss.config.js tailwind.config.js ./
+COPY src ./src
+RUN npm run build
 
-# Copia arquivos de configuração
-COPY nginx.conf /etc/nginx/http.d/default.conf
-COPY start.sh /start.sh
-
-# Ajusta permissões do script
-RUN chmod +x /start.sh
-
-# Define diretório de trabalho
+# ============================================
+# Setup Backend
+# ============================================
 WORKDIR /app/backend
 
-# Variáveis de ambiente padrão
-ENV NODE_ENV=production \
-    PORT=3001
+COPY backend/package*.json ./
+RUN npm install
 
-# Expõe porta 80 para nginx
-EXPOSE 80
+COPY backend/src ./src/
+COPY backend/entrypoint.sh ./entrypoint.sh
+RUN chmod +x ./entrypoint.sh
 
-# Health check que verifica se nginx está respondendo
+# Move frontend para public
+RUN mv /app/dist ./public
+
+# Configuração
+ENV NODE_ENV=production
+ENV PORT=3000
+EXPOSE 3000
+
+# Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
-    CMD curl -f http://localhost/health || exit 1
+    CMD curl -f http://localhost:3000/health || exit 1
 
-# Comando de inicialização
-CMD ["/start.sh"]
+# Inicia
+ENTRYPOINT ["./entrypoint.sh"]

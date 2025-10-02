@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Plus, Edit, Trash2, Search, Filter } from 'lucide-react';
+import { Plus, CreditCard as Edit, Trash2, Search, Filter } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { useData } from '../contexts/DataContext';
@@ -40,11 +40,11 @@ const Transactions: React.FC = () => {
   // Filter transactions based on current filters
   const filteredTransactions = transactions.filter(transaction => {
     const matchesType = !filters.type || transaction.type === filters.type;
-    const matchesCategory = !filters.categoryId || transaction.category.id === filters.categoryId;
-    const matchesSearch = !filters.search || 
+    const matchesCategory = !filters.categoryId || transaction.category?.id === filters.categoryId;
+    const matchesSearch = !filters.search ||
       transaction.description?.toLowerCase().includes(filters.search.toLowerCase()) ||
-      transaction.category.name.toLowerCase().includes(filters.search.toLowerCase());
-    
+      transaction.category?.name?.toLowerCase().includes(filters.search.toLowerCase());
+
     return matchesType && matchesCategory && matchesSearch;
   });
 
@@ -245,11 +245,17 @@ const Transactions: React.FC = () => {
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                     <div className="flex items-center">
-                      <div
-                        className="w-3 h-3 rounded-full mr-2"
-                        style={{ backgroundColor: transaction.category.color }}
-                      ></div>
-                      {transaction.category.name}
+                      {transaction.category ? (
+                        <>
+                          <div
+                            className="w-3 h-3 rounded-full mr-2"
+                            style={{ backgroundColor: transaction.category.color }}
+                          ></div>
+                          {transaction.category.name}
+                        </>
+                      ) : (
+                        <span className="text-gray-400">Sem categoria</span>
+                      )}
                     </div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
