@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Edit, Trash2, PiggyBank, TrendingUp, Users, Calculator, Target, Percent } from 'lucide-react';
+import { Plus, CreditCard as Edit, Trash2, PiggyBank, TrendingUp, Users, Calculator, Target, Percent } from 'lucide-react';
 import { useData } from '../contexts/DataContext';
 
 interface SavingsAccount {

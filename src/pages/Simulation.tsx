@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Edit, Trash2, Calculator, Calendar, Repeat, RotateCcw, TrendingUp, TrendingDown } from 'lucide-react';
+import { Plus, CreditCard as Edit, Trash2, Calculator, Calendar, Repeat, RotateCcw, TrendingUp, TrendingDown } from 'lucide-react';
 import { format, addMonths, addDays } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { useData } from '../contexts/DataContext';
