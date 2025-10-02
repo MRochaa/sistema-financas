@@ -119,7 +119,25 @@ app.get('/api', (req, res) => {
 // ============================================
 
 const publicPath = path.join(__dirname, '../public');
-app.use(express.static(publicPath));
+
+// Serve static files with proper cache headers
+app.use(express.static(publicPath, {
+  maxAge: process.env.NODE_ENV === 'production' ? '1y' : 0,
+  etag: true,
+  lastModified: true,
+  setHeaders: (res, filePath) => {
+    // Cache bust: force revalidation for HTML files
+    if (filePath.endsWith('.html')) {
+      res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+      res.setHeader('Pragma', 'no-cache');
+      res.setHeader('Expires', '0');
+    }
+    // Long cache for assets with hash in filename
+    else if (filePath.match(/\.(js|css|png|jpg|jpeg|gif|svg|woff|woff2)$/)) {
+      res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+    }
+  }
+}));
 
 app.get('*', (req, res) => {
   if (req.path.startsWith('/api')) {
@@ -129,6 +147,10 @@ app.get('*', (req, res) => {
   const indexPath = path.join(publicPath, 'index.html');
 
   if (fs.existsSync(indexPath)) {
+    // Force no-cache for index.html
+    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
     res.sendFile(indexPath);
   } else {
     res.status(404).json({
