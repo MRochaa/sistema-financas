@@ -18,13 +18,21 @@ router.post('/', auth, async (req, res) => {
   try {
     const { name, type, color, icon } = req.body;
 
+    // Normalize type to lowercase for database
+    const normalizedType = type?.toLowerCase();
+
+    // Validate type
+    if (!normalizedType || !['income', 'expense'].includes(normalizedType)) {
+      return res.status(400).json({ error: 'Invalid category type. Must be "income" or "expense"' });
+    }
+
     const categoryId = dbHelpers.generateId();
     const now = dbHelpers.now();
 
     db.prepare(`
       INSERT INTO categories (id, user_id, name, type, color, icon, created_at, updated_at)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(categoryId, req.userId, name, type, color, icon || '📁', now, now);
+    `).run(categoryId, req.userId, name, normalizedType, color, icon || '📁', now, now);
 
     const category = db.prepare('SELECT * FROM categories WHERE id = ?').get(categoryId);
     res.status(201).json(category);
@@ -37,13 +45,22 @@ router.post('/', auth, async (req, res) => {
 router.put('/:id', auth, async (req, res) => {
   try {
     const { name, type, color, icon } = req.body;
+
+    // Normalize type to lowercase for database
+    const normalizedType = type?.toLowerCase();
+
+    // Validate type
+    if (!normalizedType || !['income', 'expense'].includes(normalizedType)) {
+      return res.status(400).json({ error: 'Invalid category type. Must be "income" or "expense"' });
+    }
+
     const now = dbHelpers.now();
 
     const result = db.prepare(`
       UPDATE categories
       SET name = ?, type = ?, color = ?, icon = ?, updated_at = ?
       WHERE id = ? AND user_id = ?
-    `).run(name, type, color, icon, now, req.params.id, req.userId);
+    `).run(name, normalizedType, color, icon, now, req.params.id, req.userId);
 
     if (result.changes === 0) {
       return res.status(404).json({ error: 'Category not found' });

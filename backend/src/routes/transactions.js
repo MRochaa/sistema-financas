@@ -38,13 +38,21 @@ router.post('/', auth, async (req, res) => {
   try {
     const { type, amount, description, date, category_id } = req.body;
 
+    // Normalize type to lowercase for database
+    const normalizedType = type?.toLowerCase();
+
+    // Validate type
+    if (!normalizedType || !['income', 'expense'].includes(normalizedType)) {
+      return res.status(400).json({ error: 'Invalid transaction type. Must be "income" or "expense"' });
+    }
+
     const transactionId = dbHelpers.generateId();
     const now = dbHelpers.now();
 
     db.prepare(`
       INSERT INTO transactions (id, user_id, category_id, description, amount, type, date, created_at, updated_at)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(transactionId, req.userId, category_id, description, amount, type, date, now, now);
+    `).run(transactionId, req.userId, category_id, description, amount, normalizedType, date, now, now);
 
     const transaction = db.prepare(`
       SELECT
@@ -76,13 +84,22 @@ router.post('/', auth, async (req, res) => {
 router.put('/:id', auth, async (req, res) => {
   try {
     const { type, amount, description, date, category_id } = req.body;
+
+    // Normalize type to lowercase for database
+    const normalizedType = type?.toLowerCase();
+
+    // Validate type
+    if (!normalizedType || !['income', 'expense'].includes(normalizedType)) {
+      return res.status(400).json({ error: 'Invalid transaction type. Must be "income" or "expense"' });
+    }
+
     const now = dbHelpers.now();
 
     const result = db.prepare(`
       UPDATE transactions
       SET type = ?, amount = ?, description = ?, date = ?, category_id = ?, updated_at = ?
       WHERE id = ? AND user_id = ?
-    `).run(type, amount, description, date, category_id, now, req.params.id, req.userId);
+    `).run(normalizedType, amount, description, date, category_id, now, req.params.id, req.userId);
 
     if (result.changes === 0) {
       return res.status(404).json({ error: 'Transaction not found' });
