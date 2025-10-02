@@ -1,24 +1,19 @@
 import express from 'express';
-import supabase from '../config/supabase.js';
+import db from '../database/sqlite.js';
 import auth from '../middleware/auth.js';
 
 const router = express.Router();
 
 router.get('/', auth, async (req, res) => {
   try {
-    const { data: transactions, error } = await supabase
-      .from('transactions')
-      .select('*')
-      .eq('user_id', req.userId);
-
-    if (error) throw error;
+    const transactions = db.prepare('SELECT * FROM transactions WHERE user_id = ?').all(req.userId);
 
     const totalIncome = transactions
-      .filter(t => t.type === 'INCOME')
+      .filter(t => t.type === 'income')
       .reduce((sum, t) => sum + parseFloat(t.amount), 0);
 
     const totalExpense = transactions
-      .filter(t => t.type === 'EXPENSE')
+      .filter(t => t.type === 'expense')
       .reduce((sum, t) => sum + parseFloat(t.amount), 0);
 
     const balance = totalIncome - totalExpense;

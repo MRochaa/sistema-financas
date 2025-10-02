@@ -1,10 +1,15 @@
 # ============================================
-# Dockerfile para Coolify com Supabase
+# Dockerfile para Coolify com SQLite
 # ============================================
 FROM node:20-alpine
 
-# Instala apenas curl e bash
-RUN apk add --no-cache curl bash
+# Instala dependências necessárias para better-sqlite3
+RUN apk add --no-cache \
+    curl \
+    bash \
+    python3 \
+    make \
+    g++
 
 WORKDIR /app
 

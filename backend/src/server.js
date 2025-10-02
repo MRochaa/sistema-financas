@@ -7,7 +7,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { dirname } from 'path';
 import fs from 'fs';
-import supabase from './config/supabase.js';
+import db from './database/sqlite.js';
 import authRoutes from './routes/auth.js';
 import transactionRoutes from './routes/transactions.js';
 import categoryRoutes from './routes/categories.js';
@@ -59,15 +59,10 @@ app.get('/health', async (req, res) => {
   };
 
   try {
-    const { data, error } = await supabase
-      .from('users')
-      .select('count')
-      .limit(1);
-
-    if (error) throw error;
-
+    const result = db.prepare('SELECT COUNT(*) as count FROM users').get();
     health.database = 'connected';
     health.dbStatus = 'operational';
+    health.dbType = 'SQLite';
   } catch (error) {
     health.database = 'disconnected';
     health.dbStatus = 'error';
@@ -92,6 +87,7 @@ app.get('/api', (req, res) => {
     message: 'Sistema Financeiro API',
     version: '1.0.0',
     status: 'operational',
+    database: 'SQLite',
     endpoints: {
       health: '/health',
       auth: {
@@ -153,6 +149,7 @@ app.use((err, req, res, next) => {
 const server = app.listen(PORT, '0.0.0.0', () => {
   console.log('========================================');
   console.log('✅ SISTEMA FINANCEIRO - SERVIDOR ATIVO');
+  console.log('🗄️  Banco de Dados: SQLite (Local)');
   console.log('🔌 Porta:', PORT);
   console.log('🌍 Ambiente:', process.env.NODE_ENV || 'development');
   console.log('🏥 Health: http://localhost:' + PORT + '/health');
@@ -163,6 +160,7 @@ const server = app.listen(PORT, '0.0.0.0', () => {
 const gracefulShutdown = async (signal) => {
   console.log(`\n${signal} received, shutting down gracefully...`);
   server.close(() => {
+    db.close();
     console.log('Server closed');
     process.exit(0);
   });

@@ -1,19 +1,33 @@
 import express from 'express';
-import supabase from '../config/supabase.js';
+import db, { dbHelpers } from '../database/sqlite.js';
 import auth from '../middleware/auth.js';
 
 const router = express.Router();
 
 router.get('/', auth, async (req, res) => {
   try {
-    const { data, error } = await supabase
-      .from('transactions')
-      .select('*, categories(*)')
-      .eq('user_id', req.userId)
-      .order('date', { ascending: false });
+    const transactions = db.prepare(`
+      SELECT
+        t.*,
+        json_object(
+          'id', c.id,
+          'name', c.name,
+          'type', c.type,
+          'color', c.color,
+          'icon', c.icon
+        ) as categories
+      FROM transactions t
+      LEFT JOIN categories c ON t.category_id = c.id
+      WHERE t.user_id = ?
+      ORDER BY t.date DESC
+    `).all(req.userId);
 
-    if (error) throw error;
-    res.json(data || []);
+    const parsedTransactions = transactions.map(t => ({
+      ...t,
+      categories: JSON.parse(t.categories)
+    }));
+
+    res.json(parsedTransactions || []);
   } catch (error) {
     console.error('Get transactions error:', error);
     res.status(500).json({ error: 'Error fetching transactions' });
@@ -24,21 +38,35 @@ router.post('/', auth, async (req, res) => {
   try {
     const { type, amount, description, date, category_id } = req.body;
 
-    const { data, error } = await supabase
-      .from('transactions')
-      .insert([{
-        type,
-        amount,
-        description,
-        date,
-        category_id,
-        user_id: req.userId
-      }])
-      .select('*, categories(*)')
-      .single();
+    const transactionId = dbHelpers.generateId();
+    const now = dbHelpers.now();
 
-    if (error) throw error;
-    res.status(201).json(data);
+    db.prepare(`
+      INSERT INTO transactions (id, user_id, category_id, description, amount, type, date, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(transactionId, req.userId, category_id, description, amount, type, date, now, now);
+
+    const transaction = db.prepare(`
+      SELECT
+        t.*,
+        json_object(
+          'id', c.id,
+          'name', c.name,
+          'type', c.type,
+          'color', c.color,
+          'icon', c.icon
+        ) as categories
+      FROM transactions t
+      LEFT JOIN categories c ON t.category_id = c.id
+      WHERE t.id = ?
+    `).get(transactionId);
+
+    const parsedTransaction = {
+      ...transaction,
+      categories: JSON.parse(transaction.categories)
+    };
+
+    res.status(201).json(parsedTransaction);
   } catch (error) {
     console.error('Create transaction error:', error);
     res.status(500).json({ error: 'Error creating transaction' });
@@ -48,17 +76,39 @@ router.post('/', auth, async (req, res) => {
 router.put('/:id', auth, async (req, res) => {
   try {
     const { type, amount, description, date, category_id } = req.body;
+    const now = dbHelpers.now();
 
-    const { data, error } = await supabase
-      .from('transactions')
-      .update({ type, amount, description, date, category_id })
-      .eq('id', req.params.id)
-      .eq('user_id', req.userId)
-      .select('*, categories(*)')
-      .single();
+    const result = db.prepare(`
+      UPDATE transactions
+      SET type = ?, amount = ?, description = ?, date = ?, category_id = ?, updated_at = ?
+      WHERE id = ? AND user_id = ?
+    `).run(type, amount, description, date, category_id, now, req.params.id, req.userId);
 
-    if (error) throw error;
-    res.json(data);
+    if (result.changes === 0) {
+      return res.status(404).json({ error: 'Transaction not found' });
+    }
+
+    const transaction = db.prepare(`
+      SELECT
+        t.*,
+        json_object(
+          'id', c.id,
+          'name', c.name,
+          'type', c.type,
+          'color', c.color,
+          'icon', c.icon
+        ) as categories
+      FROM transactions t
+      LEFT JOIN categories c ON t.category_id = c.id
+      WHERE t.id = ?
+    `).get(req.params.id);
+
+    const parsedTransaction = {
+      ...transaction,
+      categories: JSON.parse(transaction.categories)
+    };
+
+    res.json(parsedTransaction);
   } catch (error) {
     console.error('Update transaction error:', error);
     res.status(500).json({ error: 'Error updating transaction' });
@@ -67,13 +117,12 @@ router.put('/:id', auth, async (req, res) => {
 
 router.delete('/:id', auth, async (req, res) => {
   try {
-    const { error } = await supabase
-      .from('transactions')
-      .delete()
-      .eq('id', req.params.id)
-      .eq('user_id', req.userId);
+    const result = db.prepare('DELETE FROM transactions WHERE id = ? AND user_id = ?').run(req.params.id, req.userId);
 
-    if (error) throw error;
+    if (result.changes === 0) {
+      return res.status(404).json({ error: 'Transaction not found' });
+    }
+
     res.json({ message: 'Transaction deleted successfully' });
   } catch (error) {
     console.error('Delete transaction error:', error);

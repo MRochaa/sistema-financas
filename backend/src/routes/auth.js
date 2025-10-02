@@ -2,7 +2,7 @@ import express from 'express';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { body, validationResult } from 'express-validator';
-import supabase from '../config/supabase.js';
+import db, { dbHelpers } from '../database/sqlite.js';
 import auth from '../middleware/auth.js';
 
 const router = express.Router();
@@ -23,11 +23,7 @@ router.post('/register', [
     const sanitizedEmail = sanitizeInput(email);
     const sanitizedName = sanitizeInput(name);
 
-    const { data: existingUser } = await supabase
-      .from('users')
-      .select('id')
-      .eq('email', sanitizedEmail)
-      .maybeSingle();
+    const existingUser = db.prepare('SELECT id FROM users WHERE email = ?').get(sanitizedEmail);
 
     if (existingUser) {
       return res.status(400).json({ error: 'User already exists' });
@@ -36,24 +32,20 @@ router.post('/register', [
     const saltRounds = parseInt(process.env.BCRYPT_ROUNDS) || 12;
     const hashedPassword = await bcrypt.hash(password, saltRounds);
 
-    const { data: user, error } = await supabase
-      .from('users')
-      .insert([{
-        email: sanitizedEmail,
-        name: sanitizedName,
-        password: hashedPassword
-      }])
-      .select()
-      .single();
+    const userId = dbHelpers.generateId();
+    const now = dbHelpers.now();
 
-    if (error) throw error;
+    db.prepare(`
+      INSERT INTO users (id, email, name, password, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?)
+    `).run(userId, sanitizedEmail, sanitizedName, hashedPassword, now, now);
 
-    const token = jwt.sign({ userId: user.id }, process.env.JWT_SECRET, { expiresIn: process.env.JWT_EXPIRES_IN || '7d' });
+    const token = jwt.sign({ userId }, process.env.JWT_SECRET, { expiresIn: process.env.JWT_EXPIRES_IN || '7d' });
 
     res.status(201).json({
       message: 'User registered successfully',
       token,
-      user: { id: user.id, email: user.email, name: user.name }
+      user: { id: userId, email: sanitizedEmail, name: sanitizedName }
     });
   } catch (error) {
     console.error('Register error:', error);
@@ -73,13 +65,9 @@ router.post('/login', [
 
     const { email, password } = req.body;
 
-    const { data: user, error } = await supabase
-      .from('users')
-      .select('*')
-      .eq('email', email)
-      .maybeSingle();
+    const user = db.prepare('SELECT * FROM users WHERE email = ?').get(email);
 
-    if (error || !user) {
+    if (!user) {
       return res.status(401).json({ error: 'Invalid credentials' });
     }
 
@@ -102,13 +90,9 @@ router.post('/login', [
 
 router.get('/me', auth, async (req, res) => {
   try {
-    const { data: user, error } = await supabase
-      .from('users')
-      .select('id, email, name, created_at')
-      .eq('id', req.userId)
-      .single();
+    const user = db.prepare('SELECT id, email, name, created_at FROM users WHERE id = ?').get(req.userId);
 
-    if (error || !user) {
+    if (!user) {
       return res.status(404).json({ error: 'User not found' });
     }
 
