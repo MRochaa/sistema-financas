@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Plus, Edit, Trash2, Tag } from 'lucide-react';
+import { Plus, CreditCard as Edit, Trash2, Tag } from 'lucide-react';
 import { useData } from '../contexts/DataContext';
 
 const Categories: React.FC = () => {
