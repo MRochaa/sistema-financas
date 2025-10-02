@@ -111,12 +111,28 @@ export const transactionService = {
     date: string;
     categoryId: string;
   }) {
-    const response = await api.post('/transactions', data);
+    const payload = {
+      type: data.type,
+      amount: data.amount,
+      description: data.description,
+      date: data.date,
+      category_id: data.categoryId
+    };
+    const response = await api.post('/transactions', payload);
     return response.data;
   },
 
   async update(id: string, data: any) {
-    const response = await api.put(`/transactions/${id}`, data);
+    const payload: any = {
+      type: data.type,
+      amount: data.amount,
+      description: data.description,
+      date: data.date
+    };
+    if (data.categoryId) {
+      payload.category_id = data.categoryId;
+    }
+    const response = await api.put(`/transactions/${id}`, payload);
     return response.data;
   },
 
