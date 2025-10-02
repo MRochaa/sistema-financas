@@ -103,8 +103,8 @@ const Settings: React.FC = () => {
       return;
     }
 
-    if (userFormData.password.length < 6) {
-      toast.error('A senha deve ter pelo menos 6 caracteres');
+    if (userFormData.password.length < 8) {
+      toast.error('A senha deve ter pelo menos 8 caracteres');
       return;
     }
 
@@ -220,8 +220,8 @@ const Settings: React.FC = () => {
       return;
     }
 
-    if (profileFormData.newPassword && profileFormData.newPassword.length < 6) {
-      toast.error('A nova senha deve ter pelo menos 6 caracteres');
+    if (profileFormData.newPassword && profileFormData.newPassword.length < 8) {
+      toast.error('A nova senha deve ter pelo menos 8 caracteres');
       return;
     }
 
@@ -358,7 +358,7 @@ const Settings: React.FC = () => {
                           className="w-full border border-gray-300 rounded-md px-3 py-2"
                           value={profileFormData.newPassword}
                           onChange={(e) => setProfileFormData({ ...profileFormData, newPassword: e.target.value })}
-                          placeholder="Nova senha (mín. 6 caracteres)"
+                          placeholder="Nova senha (mín. 8 caracteres)"
                         />
                       </div>
 
@@ -649,7 +649,7 @@ const Settings: React.FC = () => {
                           className="w-full border border-gray-300 rounded-md px-3 py-2 pr-10"
                           value={userFormData.password}
                           onChange={(e) => setUserFormData({ ...userFormData, password: e.target.value })}
-                          placeholder="Mínimo 6 caracteres"
+                          placeholder="Mínimo 8 caracteres"
                         />
                         <button
                           type="button"
