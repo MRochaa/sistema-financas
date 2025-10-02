@@ -147,7 +147,8 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const addTransaction = async (transactionData: Omit<Transaction, 'id' | 'userId' | 'createdAt' | 'updatedAt' | 'category'>) => {
     try {
       const newTransaction = await transactionService.create(transactionData);
-      setTransactions([newTransaction, ...transactions]);
+      console.log('New transaction created:', newTransaction);
+      await refreshTransactions();
       toast.success('Transação criada com sucesso!');
     } catch (error: any) {
       const message = error.response?.data?.error || 'Erro ao criar transação';
@@ -158,8 +159,8 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const updateTransaction = async (id: string, updates: Partial<Transaction>) => {
     try {
-      const updatedTransaction = await transactionService.update(id, updates);
-      setTransactions(transactions.map(t => t.id === id ? updatedTransaction : t));
+      await transactionService.update(id, updates);
+      await refreshTransactions();
       toast.success('Transação atualizada!');
     } catch (error: any) {
       const message = error.response?.data?.error || 'Erro ao atualizar transação';
