@@ -23,11 +23,12 @@ router.get('/', auth, async (req, res) => {
     `).all(req.userId);
 
     const parsedTransactions = transactions.map(t => {
-      const category = JSON.parse(t.categories);
+      const categoryData = JSON.parse(t.categories);
+      const { categories, ...transaction } = t;
       return {
-        ...t,
+        ...transaction,
         type: t.type.toUpperCase(),
-        categories: category ? { ...category, type: category.type.toUpperCase() } : null
+        category: categoryData && categoryData.id ? { ...categoryData, type: categoryData.type.toUpperCase() } : null
       };
     });
 
@@ -73,11 +74,12 @@ router.post('/', auth, async (req, res) => {
       WHERE t.id = ?
     `).get(transactionId);
 
-    const category = JSON.parse(transaction.categories);
+    const categoryData = JSON.parse(transaction.categories);
+    const { categories, ...transactionData } = transaction;
     const parsedTransaction = {
-      ...transaction,
+      ...transactionData,
       type: transaction.type.toUpperCase(),
-      categories: category ? { ...category, type: category.type.toUpperCase() } : null
+      category: categoryData && categoryData.id ? { ...categoryData, type: categoryData.type.toUpperCase() } : null
     };
 
     res.status(201).json(parsedTransaction);
@@ -126,11 +128,12 @@ router.put('/:id', auth, async (req, res) => {
       WHERE t.id = ?
     `).get(req.params.id);
 
-    const category = JSON.parse(transaction.categories);
+    const categoryData = JSON.parse(transaction.categories);
+    const { categories, ...transactionData } = transaction;
     const parsedTransaction = {
-      ...transaction,
+      ...transactionData,
       type: transaction.type.toUpperCase(),
-      categories: category ? { ...category, type: category.type.toUpperCase() } : null
+      category: categoryData && categoryData.id ? { ...categoryData, type: categoryData.type.toUpperCase() } : null
     };
 
     res.json(parsedTransaction);
