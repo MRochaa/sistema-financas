@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Edit, Trash2, Settings as SettingsIcon, User, Users, Save, Eye, EyeOff, Shield, Mail, Lock } from 'lucide-react';
+import { Plus, CreditCard as Edit, Trash2, Settings as SettingsIcon, User, Users, Save, Eye, EyeOff, Shield, Mail, Lock } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { authService } from '../services/api';
 import toast from 'react-hot-toast';
