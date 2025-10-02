@@ -1,30 +1,33 @@
-require('dotenv').config();
-const express = require('express');
-const cors = require('cors');
-const helmet = require('helmet');
-const rateLimit = require('express-rate-limit');
-const path = require('path');
-const { PrismaClient } = require('@prisma/client');
+import 'dotenv/config';
+import express from 'express';
+import cors from 'cors';
+import helmet from 'helmet';
+import rateLimit from 'express-rate-limit';
+import path from 'path';
+import { fileURLToPath } from 'url';
+import { dirname } from 'path';
+import fs from 'fs';
+import supabase from './config/supabase.js';
+import authRoutes from './routes/auth.js';
+import transactionRoutes from './routes/transactions.js';
+import categoryRoutes from './routes/categories.js';
+import dashboardRoutes from './routes/dashboard.js';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
 
 const app = express();
 const PORT = process.env.PORT || 3000;
-
-// Initialize Prisma
-const prisma = new PrismaClient({
-  log: process.env.NODE_ENV === 'development' ? ['query', 'error', 'warn'] : ['error'],
-});
 
 // ============================================
 // Security Middleware
 // ============================================
 
-// Helmet for security headers
 app.use(helmet({
   contentSecurityPolicy: false,
   crossOriginEmbedderPolicy: false
 }));
 
-// Rate limiting
 const limiter = rateLimit({
   windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS) || 15 * 60 * 1000,
   max: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS) || 100,
@@ -33,13 +36,11 @@ const limiter = rateLimit({
 
 app.use('/api/', limiter);
 
-// CORS
 app.use(cors({
   origin: process.env.FRONTEND_URL || '*',
   credentials: true
 }));
 
-// Body parser
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
@@ -58,7 +59,13 @@ app.get('/health', async (req, res) => {
   };
 
   try {
-    await prisma.$queryRaw`SELECT 1`;
+    const { data, error } = await supabase
+      .from('users')
+      .select('count')
+      .limit(1);
+
+    if (error) throw error;
+
     health.database = 'connected';
     health.dbStatus = 'operational';
   } catch (error) {
@@ -74,11 +81,6 @@ app.get('/health', async (req, res) => {
 // ============================================
 // API Routes
 // ============================================
-
-const authRoutes = require('./routes/auth');
-const transactionRoutes = require('./routes/transactions');
-const categoryRoutes = require('./routes/categories');
-const dashboardRoutes = require('./routes/dashboard');
 
 app.use('/api/auth', authRoutes);
 app.use('/api/transactions', transactionRoutes);
@@ -122,7 +124,6 @@ app.get('*', (req, res) => {
   }
 
   const indexPath = path.join(publicPath, 'index.html');
-  const fs = require('fs');
 
   if (fs.existsSync(indexPath)) {
     res.sendFile(indexPath);
@@ -149,49 +150,38 @@ app.use((err, req, res, next) => {
 // Server Startup
 // ============================================
 
-async function startServer() {
-  try {
-    await prisma.$connect();
-    console.log('Connected to PostgreSQL');
+const server = app.listen(PORT, '0.0.0.0', () => {
+  console.log('========================================');
+  console.log('✅ SISTEMA FINANCEIRO - SERVIDOR ATIVO');
+  console.log('🔌 Porta:', PORT);
+  console.log('🌍 Ambiente:', process.env.NODE_ENV || 'development');
+  console.log('🏥 Health: http://localhost:' + PORT + '/health');
+  console.log('🚀 API: http://localhost:' + PORT + '/api');
+  console.log('========================================');
+});
 
-    const server = app.listen(PORT, '0.0.0.0', () => {
-      console.log('========================================');
-      console.log('SISTEMA FINANCEIRO - SERVIDOR ATIVO');
-      console.log('Porta:', PORT);
-      console.log('Ambiente:', process.env.NODE_ENV || 'development');
-      console.log('Health Check: http://localhost:' + PORT + '/health');
-      console.log('API: http://localhost:' + PORT + '/api');
-      console.log('========================================');
-    });
+const gracefulShutdown = async (signal) => {
+  console.log(`\n${signal} received, shutting down gracefully...`);
+  server.close(() => {
+    console.log('Server closed');
+    process.exit(0);
+  });
 
-    const gracefulShutdown = async (signal) => {
-      console.log('Shutting down...');
-      server.close(async () => {
-        await prisma.$disconnect();
-        process.exit(0);
-      });
-    };
-
-    process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
-    process.on('SIGINT', () => gracefulShutdown('SIGINT'));
-
-  } catch (error) {
-    console.error('Error starting server:', error);
-    await prisma.$disconnect();
+  setTimeout(() => {
+    console.error('Forcing shutdown after timeout');
     process.exit(1);
-  }
-}
+  }, 10000);
+};
 
+process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+process.on('SIGINT', () => gracefulShutdown('SIGINT'));
 process.on('uncaughtException', (error) => {
-  console.error('Uncaught Exception:', error);
+  console.error('❌ Uncaught Exception:', error);
   process.exit(1);
 });
-
 process.on('unhandledRejection', (error) => {
-  console.error('Unhandled Rejection:', error);
+  console.error('❌ Unhandled Rejection:', error);
   process.exit(1);
 });
 
-startServer();
-
-module.exports = app;
+export default app;
