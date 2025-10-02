@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Plus, Edit, Trash2, Settings as SettingsIcon, User, Users, Save, Eye, EyeOff, Shield, Mail, Lock } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
+import { authService } from '../services/api';
 import toast from 'react-hot-toast';
 
 interface LinkedUser {
@@ -93,9 +94,9 @@ const Settings: React.FC = () => {
     }));
   };
 
-  const handleCreateUser = (e: React.FormEvent) => {
+  const handleCreateUser = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     // Validations
     if (userFormData.password !== userFormData.confirmPassword) {
       toast.error('As senhas não coincidem');
@@ -107,30 +108,39 @@ const Settings: React.FC = () => {
       return;
     }
 
-    // Check if email already exists
-    const emailExists = linkedUsers.some(u => u.email === userFormData.email) || 
+    // Check if email already exists locally
+    const emailExists = linkedUsers.some(u => u.email === userFormData.email) ||
                        user?.email === userFormData.email;
-    
+
     if (emailExists) {
       toast.error('Este e-mail já está em uso');
       return;
     }
 
-    const newUser: LinkedUser = {
-      id: Date.now().toString(),
-      name: userFormData.name,
-      email: userFormData.email,
-      role: userFormData.role,
-      isActive: true,
-      createdBy: user?.name || 'Admin',
-      createdAt: new Date().toISOString()
-    };
+    try {
+      // Create user in the backend
+      await authService.register(userFormData.email, userFormData.password, userFormData.name);
 
-    setLinkedUsers(prev => [...prev, newUser]);
-    setShowUserModal(false);
-    setEditingUser(null);
-    resetUserForm();
-    toast.success('Usuário criado com sucesso');
+      const newUser: LinkedUser = {
+        id: Date.now().toString(),
+        name: userFormData.name,
+        email: userFormData.email,
+        role: userFormData.role,
+        isActive: true,
+        createdBy: user?.name || 'Admin',
+        createdAt: new Date().toISOString()
+      };
+
+      setLinkedUsers(prev => [...prev, newUser]);
+      setShowUserModal(false);
+      setEditingUser(null);
+      resetUserForm();
+      toast.success('Usuário criado com sucesso! Agora ele pode fazer login.');
+    } catch (error: any) {
+      console.error('Error creating user:', error);
+      const message = error.response?.data?.error || 'Erro ao criar usuário';
+      toast.error(message);
+    }
   };
 
   const handleUpdateUser = (e: React.FormEvent) => {
