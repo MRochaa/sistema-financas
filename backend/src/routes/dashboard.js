@@ -8,12 +8,18 @@ router.get('/', auth, async (req, res) => {
   try {
     const transactions = db.prepare('SELECT * FROM transactions WHERE user_id = ?').all(req.userId);
 
-    const totalIncome = transactions
-      .filter(t => t.type === 'income')
+    // Normalize transactions type to uppercase for frontend
+    const normalizedTransactions = transactions.map(t => ({
+      ...t,
+      type: t.type.toUpperCase()
+    }));
+
+    const totalIncome = normalizedTransactions
+      .filter(t => t.type === 'INCOME')
       .reduce((sum, t) => sum + parseFloat(t.amount), 0);
 
-    const totalExpense = transactions
-      .filter(t => t.type === 'expense')
+    const totalExpense = normalizedTransactions
+      .filter(t => t.type === 'EXPENSE')
       .reduce((sum, t) => sum + parseFloat(t.amount), 0);
 
     const balance = totalIncome - totalExpense;
@@ -22,7 +28,7 @@ router.get('/', auth, async (req, res) => {
       totalIncome,
       totalExpense,
       balance,
-      transactions: transactions.length
+      transactions: normalizedTransactions.length
     });
   } catch (error) {
     console.error('Dashboard error:', error);

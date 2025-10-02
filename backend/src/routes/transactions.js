@@ -24,6 +24,7 @@ router.get('/', auth, async (req, res) => {
 
     const parsedTransactions = transactions.map(t => ({
       ...t,
+      type: t.type.toUpperCase(),
       categories: JSON.parse(t.categories)
     }));
 
@@ -71,6 +72,7 @@ router.post('/', auth, async (req, res) => {
 
     const parsedTransaction = {
       ...transaction,
+      type: transaction.type.toUpperCase(),
       categories: JSON.parse(transaction.categories)
     };
 
@@ -122,6 +124,7 @@ router.put('/:id', auth, async (req, res) => {
 
     const parsedTransaction = {
       ...transaction,
+      type: transaction.type.toUpperCase(),
       categories: JSON.parse(transaction.categories)
     };
 
