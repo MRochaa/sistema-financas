@@ -194,7 +194,7 @@ const Transactions: React.FC = () => {
               onChange={(e) => setFilters({ ...filters, categoryId: e.target.value })}
             >
               <option value="">Todas</option>
-              {categories.map((category) => (
+              {categories.filter(c => c && c.id && c.name).map((category) => (
                 <option key={category.id} value={category.id}>
                   {category.name}
                 </option>
@@ -351,7 +351,7 @@ const Transactions: React.FC = () => {
                     onChange={(e) => setFormData({ ...formData, categoryId: e.target.value })}
                   >
                     <option value="">Selecione uma categoria</option>
-                    {getFilteredCategories().map((category) => (
+                    {getFilteredCategories().filter(c => c && c.id && c.name).map((category) => (
                       <option key={category.id} value={category.id}>
                         {category.name}
                       </option>

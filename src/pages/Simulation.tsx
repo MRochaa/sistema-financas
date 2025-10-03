@@ -380,7 +380,7 @@ const Simulation: React.FC = () => {
             >
               <option value="">Categoria</option>
               {categories
-                .filter(cat => cat.type === quickForm.type)
+                .filter(cat => cat && cat.type === quickForm.type && cat.id && cat.name)
                 .map((category) => (
                   <option key={category.id} value={category.id}>
                     {category.name}
@@ -754,7 +754,7 @@ const Simulation: React.FC = () => {
                   >
                     <option value="">Selecione uma categoria</option>
                     {categories
-                      .filter(cat => cat.type === formData.type)
+                      .filter(cat => cat && cat.type === formData.type && cat.id && cat.name)
                       .map((category) => (
                         <option key={category.id} value={category.id}>
                           {category.name}
