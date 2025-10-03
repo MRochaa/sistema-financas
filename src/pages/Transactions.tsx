@@ -25,6 +25,8 @@ const Transactions: React.FC = () => {
     categoryId: '',
     search: ''
   });
+
+  console.log('Transactions in component:', transactions);
   const [formData, setFormData] = useState<TransactionFormData>({
     type: 'EXPENSE',
     amount: '',
@@ -127,6 +129,10 @@ const Transactions: React.FC = () => {
   const getFilteredCategories = () => {
     return categories.filter(cat => cat.type === formData.type);
   };
+
+  if (transactions.some(t => !t.category)) {
+    console.warn('Found transactions without category:', transactions.filter(t => !t.category));
+  }
 
   return (
     <div className="space-y-6">

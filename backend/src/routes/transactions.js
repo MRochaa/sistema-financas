@@ -43,6 +43,8 @@ router.post('/', auth, async (req, res) => {
   try {
     const { type, amount, description, date, category_id } = req.body;
 
+    console.log('Creating transaction with data:', { type, amount, description, date, category_id });
+
     // Normalize type to lowercase for database
     const normalizedType = type?.toLowerCase();
 
@@ -81,6 +83,9 @@ router.post('/', auth, async (req, res) => {
       type: transaction.type.toUpperCase(),
       category: categoryData && categoryData.id ? { ...categoryData, type: categoryData.type.toUpperCase() } : null
     };
+
+    console.log('Transaction created:', parsedTransaction);
+    console.log('Category data:', categoryData);
 
     res.status(201).json(parsedTransaction);
   } catch (error) {
