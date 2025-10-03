@@ -40,15 +40,17 @@ const Transactions: React.FC = () => {
   });
 
   // Filter transactions based on current filters
-  const filteredTransactions = transactions.filter(transaction => {
-    const matchesType = !filters.type || transaction.type === filters.type;
-    const matchesCategory = !filters.categoryId || transaction.category?.id === filters.categoryId;
-    const matchesSearch = !filters.search ||
-      transaction.description?.toLowerCase().includes(filters.search.toLowerCase()) ||
-      transaction.category?.name?.toLowerCase().includes(filters.search.toLowerCase());
+  const filteredTransactions = transactions
+    .filter(t => t && t.id) // Ensure transaction exists
+    .filter(transaction => {
+      const matchesType = !filters.type || transaction.type === filters.type;
+      const matchesCategory = !filters.categoryId || transaction.category?.id === filters.categoryId;
+      const matchesSearch = !filters.search ||
+        transaction.description?.toLowerCase().includes(filters.search.toLowerCase()) ||
+        transaction.category?.name?.toLowerCase().includes(filters.search.toLowerCase());
 
-    return matchesType && matchesCategory && matchesSearch;
-  });
+      return matchesType && matchesCategory && matchesSearch;
+    });
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -241,7 +243,9 @@ const Transactions: React.FC = () => {
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
-              {filteredTransactions.map((transaction) => (
+              {filteredTransactions.map((transaction) => {
+                console.log('Rendering transaction:', transaction);
+                return (
                 <tr key={transaction.id} className="hover:bg-gray-50">
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                     {format(new Date(transaction.date), 'dd/MM/yyyy', { locale: ptBR })}
@@ -296,7 +300,8 @@ const Transactions: React.FC = () => {
                     </button>
                   </td>
                 </tr>
-              ))}
+              );
+              })}
             </tbody>
           </table>
           {filteredTransactions.length === 0 && (

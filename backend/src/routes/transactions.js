@@ -32,6 +32,11 @@ router.get('/', auth, async (req, res) => {
       };
     });
 
+    console.log(`Returning ${parsedTransactions.length} transactions`);
+    if (parsedTransactions.length > 0) {
+      console.log('Sample transaction:', parsedTransactions[0]);
+    }
+
     res.json(parsedTransactions || []);
   } catch (error) {
     console.error('Get transactions error:', error);
