@@ -1,0 +1,26 @@
+{
+  "name": "Sistema Financeiro do Lar",
+  "description": "Sistema completo de controle financeiro com PostgreSQL integrado",
+  "type": "docker-compose",
+  "docker_compose_file": "docker-compose.yaml",
+  "port": 3000,
+  "healthcheck": {
+    "path": "/health",
+    "interval": 30,
+    "timeout": 10,
+    "retries": 3,
+    "start_period": 60
+  },
+  "environment": {
+    "NODE_ENV": "production",
+    "PORT": "3000"
+  },
+  "required_env_vars": [
+    "FINANCAS_POSTGRES_USER",
+    "FINANCAS_POSTGRES_PASSWORD",
+    "FINANCAS_POSTGRES_DB",
+    "JWT_SECRET"
+  ],
+  "build_method": "docker_compose",
+  "deploy_type": "application_with_database"
+}
