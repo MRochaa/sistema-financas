@@ -5,52 +5,39 @@ FROM node:20-alpine AS frontend-builder
 
 WORKDIR /app
 
-# Copia arquivos de dependências do frontend (pasta frontend/)
-COPY frontend/package*.json ./frontend/
+# Copia arquivos de dependências do frontend
+COPY frontend/package*.json ./
 
-# Instala TODAS as dependências (incluindo dev) para o build
-WORKDIR /app/frontend
+# Instala TODAS as dependências incluindo devDependencies
 RUN npm install
 
-# Copia código fonte do frontend (pasta frontend/)
-WORKDIR /app
-COPY frontend/ ./frontend/
+# Copia o código do frontend
+COPY frontend/ ./
 
-# Executa o build do frontend (vite em /app/frontend)
-WORKDIR /app/frontend
-ARG VITE_API_URL=/api
-ENV VITE_API_URL=${VITE_API_URL}
-RUN VITE_API_URL=${VITE_API_URL} npm run build
+# Build do frontend para produção
+RUN npm run build
 
 # ============================================
 # ESTÁGIO 2: Build do Backend
 # ============================================
 FROM node:20-alpine AS backend-builder
 
-# Instala dependências do sistema necessárias para Prisma
-# Otimizado com timeout e retry para evitar travamentos
-RUN apk update --no-cache && \
-    apk add --no-cache --timeout=300 \
-    openssl \
-    libc6-compat \
-    && rm -rf /var/cache/apk/* /tmp/*
-
 WORKDIR /app
+
+# Instala openssl para o Prisma funcionar corretamente
+RUN apk add --no-cache openssl
 
 # Copia arquivos de dependências do backend
 COPY backend/package*.json ./
 
-# Instala todas as dependências
+# Instala dependências do backend
 RUN npm install
 
-# Copia código fonte do backend
+# Copia o código do backend
 COPY backend/ ./
 
-# Gera o Prisma Client com os targets binários corretos
-RUN npx prisma generate
-
-# Remove devDependencies mantendo apenas produção
-RUN npm prune --production
+# Gera o Prisma Client
+RUN if [ -f prisma/schema.prisma ]; then npx prisma generate; fi
 
 # ============================================
 # ESTÁGIO 3: Imagem Final de Produção
@@ -58,51 +45,46 @@ RUN npm prune --production
 FROM node:20-alpine
 
 # Instala nginx, openssl e ferramentas necessárias
-# Otimizado com timeout e limpeza para evitar travamentos
-RUN apk update --no-cache && \
-    apk add --no-cache --timeout=300 \
+RUN apk add --no-cache \
     nginx \
-    bash \
     curl \
-    openssl \
-    libc6-compat \
-    && rm -rf /var/cache/apk/* /tmp/* /var/tmp/*
+    bash \
+    openssl
 
-# Cria diretórios necessários com permissões corretas
-RUN mkdir -p /var/log/nginx /var/cache/nginx /var/run/nginx /usr/share/nginx/html \
-    && chown -R nginx:nginx /var/log/nginx /var/cache/nginx /var/run/nginx
+# Cria diretórios necessários
+RUN mkdir -p \
+    /usr/share/nginx/html \
+    /var/log/nginx \
+    /var/cache/nginx \
+    /run/nginx \
+    /etc/nginx/http.d
 
-# Copia backend compilado com node_modules e prisma client gerado
+# Copia o frontend buildado
+COPY --from=frontend-builder /app/dist /usr/share/nginx/html
+
+# Copia o backend completo com node_modules
 COPY --from=backend-builder /app /app/backend
 
-# Copia frontend compilado da pasta frontend/
-COPY --from=frontend-builder /app/frontend/dist /usr/share/nginx/html
-
-# Copia arquivos de configuração
+# Copia configurações
 COPY nginx.conf /etc/nginx/http.d/default.conf
 COPY start.sh /start.sh
-COPY debug-container.sh /debug-container.sh
 
-# Ajusta permissões dos scripts
-RUN chmod +x /start.sh /debug-container.sh
+# Permissões de execução
+RUN chmod +x /start.sh
 
 # Define diretório de trabalho
 WORKDIR /app/backend
 
-# Variáveis de ambiente padrão
+# Variáveis de ambiente
 ENV NODE_ENV=production
+ENV BACKEND_PORT=3001
 
-# Build args para controle de comportamento
-ARG BUILD_TIMEOUT=300
-ARG APK_TIMEOUT=300
-
-# Expõe porta 3000 (Nginx)
+# Porta principal (Nginx)
 EXPOSE 3000
 
-# Health check que verifica se nginx está respondendo (porta 3000)
-# Usa timeout mais agressivo e menos retries para falhar mais rápido
-HEALTHCHECK --interval=15s --timeout=5s --start-period=60s --retries=3 \
-CMD curl -f http://localhost:3000/health || exit 1
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
+    CMD curl -f http://localhost:3000/health || exit 1
 
 # Comando de inicialização
 CMD ["/start.sh"]
