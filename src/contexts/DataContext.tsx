@@ -50,25 +50,43 @@ export const useData = () => {
   return context;
 };
 
+// Initial categories - basic set for new users
+const initialCategories: Category[] = [
+  // Income categories
+  { id: '1', name: 'Salário', type: 'INCOME', color: '#10B981' },
+  { id: '2', name: 'Freelance', type: 'INCOME', color: '#059669' },
+  { id: '3', name: 'Investimentos', type: 'INCOME', color: '#047857' },
+  { id: '4', name: 'Outros Rendimentos', type: 'INCOME', color: '#065f46' },
+  
+  // Expense categories
+  { id: '5', name: 'Alimentação', type: 'EXPENSE', color: '#EF4444' },
+  { id: '6', name: 'Transporte', type: 'EXPENSE', color: '#DC2626' },
+  { id: '7', name: 'Moradia', type: 'EXPENSE', color: '#B91C1C' },
+  { id: '8', name: 'Saúde', type: 'EXPENSE', color: '#991B1B' },
+  { id: '9', name: 'Educação', type: 'EXPENSE', color: '#7F1D1D' },
+  { id: '10', name: 'Lazer', type: 'EXPENSE', color: '#F59E0B' },
+  { id: '11', name: 'Roupas', type: 'EXPENSE', color: '#D97706' },
+  { id: '12', name: 'Tecnologia', type: 'EXPENSE', color: '#B45309' },
+  { id: '13', name: 'Contas', type: 'EXPENSE', color: '#92400E' },
+  { id: '14', name: 'Outros Gastos', type: 'EXPENSE', color: '#78350F' }
+];
+
+// No initial transactions - start clean
+const initialTransactions: Transaction[] = [];
+
 export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const { user } = useAuth();
   const [categories, setCategories] = useState<Category[]>([]);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [loading, setLoading] = useState(true);
+  const { user } = useAuth();
 
   const refreshCategories = async () => {
     if (!user) return;
     try {
       const data = await categoryService.getAll();
-      console.log('Categories received:', data);
-      // Filter out any invalid categories
-      const validCategories = (data || []).filter(cat =>
-        cat && cat.id && cat.type && ['INCOME', 'EXPENSE'].includes(cat.type)
-      );
-      setCategories(validCategories);
-    } catch (error: any) {
+      setCategories(data);
+    } catch (error) {
       console.error('Error fetching categories:', error);
-      toast.error('Erro ao carregar categorias');
     }
   };
 
@@ -76,25 +94,9 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (!user) return;
     try {
       const data = await transactionService.getAll();
-      console.log('===========================================');
-      console.log('DATACONTEXT: Received transactions from API:', data.length);
-      console.log('DATACONTEXT: Full API response:', JSON.stringify(data, null, 2));
-      data.forEach((t: any, idx: number) => {
-        console.log(`DATACONTEXT: Transaction ${idx}:`, {
-          id: t.id,
-          has_category: !!t.category,
-          category_type: typeof t.category,
-          category_id: t.category?.id,
-          category_name: t.category?.name,
-          has_user: !!t.user,
-          user_name: t.user?.name
-        });
-      });
-      console.log('===========================================');
       setTransactions(data);
-    } catch (error: any) {
+    } catch (error) {
       console.error('Error fetching transactions:', error);
-      toast.error('Erro ao carregar transações');
     }
   };
 
@@ -118,8 +120,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       const newCategory = await categoryService.create(categoryData);
       console.log('New category created:', newCategory);
-
-      // Validate the new category before adding
+      
       if (newCategory && newCategory.id && newCategory.type) {
         setCategories([...categories, newCategory]);
         toast.success('Categoria criada com sucesso!');
