@@ -1,143 +1,102 @@
-// Servidor principal da aplicação
-// Gerencia a inicialização do Express e conexão com banco de dados
+import express from 'express';
+import cors from 'cors';
+import dotenv from 'dotenv';
+import authRoutes from './routes/auth.js';
+import transactionRoutes from './routes/transactions.js';
+import categoryRoutes from './routes/categories.js';
+import dashboardRoutes from './routes/dashboard.js';
+import { errorHandler } from './middleware/errorHandler.js';
+import { 
+  securityHeaders, 
+  globalRateLimit, 
+  requestSizeLimiter 
+} from './middleware/security.js';
 
-const express = require('express');
-const cors = require('cors');
-const dotenv = require('dotenv');
-const { PrismaClient } = require('@prisma/client');
-
-// Carrega variáveis de ambiente
 dotenv.config();
 
-// Inicializa Express e Prisma
 const app = express();
-const prisma = new PrismaClient({
-  // Configurações para melhor logging em produção
-  log: process.env.NODE_ENV === 'production' 
-    ? ['error', 'warn'] 
-    : ['query', 'info', 'warn', 'error'],
-});
-
-// Porta do servidor
 const PORT = process.env.PORT || 3001;
 
-// Middlewares globais
-app.use(cors({
-  origin: process.env.FRONTEND_URL || '*',
-  credentials: true
-}));
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+// Trust proxy for accurate IP addresses
+app.set('trust proxy', 1);
 
-// Middleware de logging simples
+// Middleware
+app.use(securityHeaders);
+app.use(globalRateLimit);
+app.use(requestSizeLimiter);
+
+app.use(cors({
+  origin: function (origin, callback) {
+    const allowedOrigins = [
+      process.env.FRONTEND_URL,
+      'http://localhost:5173',
+      'http://localhost:3000'
+    ].filter(Boolean);
+    
+    if (!origin || allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
+  credentials: true,
+  optionsSuccessStatus: 200
+}));
+
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+
+// Security middleware
 app.use((req, res, next) => {
-  console.log(`[${new Date().toISOString()}] ${req.method} ${req.path}`);
+  res.removeHeader('X-Powered-By');
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-Frame-Options', 'DENY');
+  res.setHeader('X-XSS-Protection', '1; mode=block');
   next();
 });
 
-// Rota de health check IMPORTANTE para o Docker
-app.get('/api/health', (req, res) => {
-  res.status(200).json({ 
-    status: 'healthy',
-    timestamp: new Date().toISOString(),
-    environment: process.env.NODE_ENV
-  });
-});
-
-// Rota de teste da API
-app.get('/api', (req, res) => {
+// Health check
+app.get('/health', (req, res) => {
   res.json({ 
-    message: 'API do Sistema de Finanças funcionando!',
-    version: '1.0.0'
+    status: 'OK', 
+    timestamp: new Date().toISOString(),
+    version: process.env.npm_package_version || '1.0.0',
+    environment: process.env.NODE_ENV || 'development'
   });
 });
 
-// Importa e usa as rotas da aplicação
-try {
-  const authRoutes = require('../routes/auth');
-  const accountRoutes = require('../routes/accounts');
-  const transactionRoutes = require('../routes/transactions');
-  const categoryRoutes = require('../routes/categories');
-  const budgetRoutes = require('../routes/budgets');
-  const dashboardRoutes = require('../routes/dashboard');
-  
-  // Registra as rotas
-  app.use('/api/auth', authRoutes);
-  app.use('/api/accounts', accountRoutes);
-  app.use('/api/transactions', transactionRoutes);
-  app.use('/api/categories', categoryRoutes);
-  app.use('/api/budgets', budgetRoutes);
-  app.use('/api/dashboard', dashboardRoutes);
-} catch (error) {
-  console.error('Erro ao carregar rotas:', error);
-  // Continua mesmo se algumas rotas falharem
-}
+// Routes
+app.use('/api/auth', authRoutes);
+app.use('/api/transactions', transactionRoutes);
+app.use('/api/categories', categoryRoutes);
+app.use('/api/dashboard', dashboardRoutes);
 
-// Middleware de tratamento de erros global
-app.use((err, req, res, next) => {
-  console.error('Erro:', err);
-  res.status(err.status || 500).json({
-    error: process.env.NODE_ENV === 'production' 
-      ? 'Erro interno do servidor' 
-      : err.message
-  });
-});
+// Error handling
+app.use(errorHandler);
 
-// Rota 404 para requisições não encontradas
+// 404 handler
 app.use('*', (req, res) => {
-  res.status(404).json({ error: 'Rota não encontrada' });
-});
-
-// Função para conectar ao banco de dados
-async function connectDatabase() {
-  try {
-    await prisma.$connect();
-    console.log('✅ Conectado ao banco de dados PostgreSQL');
-    return true;
-  } catch (error) {
-    console.error('❌ Erro ao conectar ao banco de dados:', error);
-    // Em produção, tenta reconectar após 5 segundos
-    if (process.env.NODE_ENV === 'production') {
-      console.log('Tentando reconectar em 5 segundos...');
-      setTimeout(connectDatabase, 5000);
-    }
-    return false;
-  }
-}
-
-// Inicializa o servidor
-async function startServer() {
-  // Conecta ao banco de dados
-  await connectDatabase();
-  
-  // Inicia o servidor Express
-  app.listen(PORT, '0.0.0.0', () => {
-    console.log('========================================');
-    console.log(`🚀 Servidor rodando na porta ${PORT}`);
-    console.log(`📊 Ambiente: ${process.env.NODE_ENV}`);
-    console.log(`🔗 API disponível em http://localhost:${PORT}/api`);
-    console.log('========================================');
+  res.status(404).json({ 
+    error: 'Route not found',
+    path: req.originalUrl,
+    method: req.method
   });
-}
+});
 
-// Tratamento de sinais para shutdown gracioso
-process.on('SIGTERM', async () => {
-  console.log('SIGTERM recebido, encerrando servidor...');
-  await prisma.$disconnect();
+// Graceful shutdown
+process.on('SIGTERM', () => {
+  console.log('SIGTERM received, shutting down gracefully');
   process.exit(0);
 });
 
-process.on('SIGINT', async () => {
-  console.log('SIGINT recebido, encerrando servidor...');
-  await prisma.$disconnect();
+process.on('SIGINT', () => {
+  console.log('SIGINT received, shutting down gracefully');
   process.exit(0);
 });
 
-// Inicia o servidor
-startServer().catch(error => {
-  console.error('Erro fatal ao iniciar servidor:', error);
-  process.exit(1);
+app.listen(PORT, () => {
+  console.log(`🚀 Server running on port ${PORT}`);
+  console.log(`📊 Environment: ${process.env.NODE_ENV || 'development'}`);
+  console.log(`🔒 Security headers enabled`);
+  console.log(`⚡ Rate limiting active`);
 });
-
-// Exporta app e prisma para uso em outros módulos
-module.exports = { app, prisma };

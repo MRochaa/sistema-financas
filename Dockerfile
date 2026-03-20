@@ -1,94 +1,67 @@
-# ============================================
-# ESTÁGIO 1: Build do Frontend
-# ============================================
-FROM node:20-alpine AS frontend-builder
+# Multi-stage build for production optimization
+FROM node:18-alpine AS base
 
+# Install security updates
+RUN apk update && apk upgrade && apk add --no-cache dumb-init
+
+# Create app directory with proper permissions
+RUN addgroup -g 1001 -S nodejs
+RUN adduser -S nextjs -u 1001
 WORKDIR /app
+RUN chown nextjs:nodejs /app
 
-# Copia arquivos de dependências do frontend
-COPY frontend/package*.json ./frontend/
-
-# Instala TODAS as dependências (incluindo dev) para o build
-WORKDIR /app/frontend
-RUN npm install
-
-# Copia código fonte do frontend
+# Frontend build stage
+FROM base AS frontend-deps
 WORKDIR /app
-COPY frontend/ ./frontend/
+COPY package*.json ./
+RUN npm ci --only=production && npm cache clean --force
 
-# Executa o build do frontend
-WORKDIR /app/frontend
+FROM base AS frontend-builder
+WORKDIR /app
+COPY package*.json ./
+RUN npm ci
+COPY . .
 RUN npm run build
 
-# ============================================
-# ESTÁGIO 2: Build do Backend
-# ============================================
-FROM node:20-alpine AS backend-builder
-
-# Instala dependências do sistema necessárias para Prisma
-RUN apk add --no-cache openssl openssl-dev libc6-compat
-
+# Backend build stage
+FROM base AS backend-deps
 WORKDIR /app
-
-# Copia arquivos de dependências do backend
 COPY backend/package*.json ./
+RUN npm ci --only=production && npm cache clean --force
 
-# Instala todas as dependências
-RUN npm install
-
-# Copia código fonte do backend
-COPY backend/ ./
-
-# Gera o Prisma Client com os targets binários corretos
+FROM base AS backend-builder
+WORKDIR /app
+COPY backend/package*.json ./
+RUN npm ci
+COPY backend/ .
 RUN npx prisma generate
 
-# Remove devDependencies mantendo apenas produção
-RUN npm prune --production
+# Production stage
+FROM base AS production
+WORKDIR /app
 
-# ============================================
-# ESTÁGIO 3: Imagem Final de Produção
-# ============================================
-FROM node:20-alpine
+# Copy backend dependencies and code
+COPY --from=backend-deps --chown=nextjs:nodejs /app/node_modules ./node_modules
+COPY --from=backend-builder --chown=nextjs:nodejs /app .
 
-# Instala nginx, openssl e ferramentas necessárias
-RUN apk add --no-cache \
-    nginx \
-    bash \
-    curl \
-    openssl \
-    libc6-compat \
-    && rm -rf /var/cache/apk/*
+# Copy frontend build
+COPY --from=frontend-builder --chown=nextjs:nodejs /app/dist ./public
 
-# Cria diretórios necessários com permissões corretas
-RUN mkdir -p /var/log/nginx /var/cache/nginx /var/run/nginx /usr/share/nginx/html \
-    && chown -R nginx:nginx /var/log/nginx /var/cache/nginx /var/run/nginx
+# Create logs directory
+RUN mkdir -p /app/logs && chown nextjs:nodejs /app/logs
 
-# Copia backend compilado com node_modules e prisma client gerado
-COPY --from=backend-builder /app /app/backend
+# Switch to non-root user
+USER nextjs
 
-# Copia frontend compilado (apenas os arquivos estáticos gerados)
-COPY --from=frontend-builder /app/frontend/dist /usr/share/nginx/html
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+  CMD node -e "require('http').get('http://localhost:3001/health', (res) => { process.exit(res.statusCode === 200 ? 0 : 1) })"
 
-# Copia arquivos de configuração
-COPY nginx.conf /etc/nginx/http.d/default.conf
-COPY start.sh /start.sh
+# Expose port
+EXPOSE 3001
 
-# Ajusta permissões do script
-RUN chmod +x /start.sh
+# Use dumb-init to handle signals properly
+ENTRYPOINT ["dumb-init", "--"]
 
-# Define diretório de trabalho
-WORKDIR /app/backend
-
-# Variáveis de ambiente padrão
-ENV NODE_ENV=production \
-    PORT=3001
-
-# Expõe porta 80 para nginx
-EXPOSE 80
-
-# Health check que verifica se nginx está respondendo
-HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
-    CMD curl -f http://localhost/health || exit 1
-
-# Comando de inicialização
-CMD ["/start.sh"]
+# Start the application
+CMD ["sh", "-c", "npx prisma migrate deploy && npx prisma db seed && npm start"]

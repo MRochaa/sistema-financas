@@ -8,7 +8,6 @@ import {
   Heart,
   PiggyBank,
   Calculator,
-  ShoppingCart,
   BarChart3, 
   User, 
   LogOut, 
@@ -36,7 +35,6 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
     { name: 'Lista de Desejos', href: '/wishlist', icon: Heart },
     { name: 'Poupança', href: '/savings', icon: PiggyBank },
     { name: 'Simulação', href: '/simulation', icon: Calculator },
-    { name: 'Lista de Compras', href: '/shopping-list', icon: ShoppingCart },
     { name: 'Relatórios', href: '/reports', icon: BarChart3 },
     { name: 'Configurações', href: '/settings', icon: SettingsIcon },
   ];

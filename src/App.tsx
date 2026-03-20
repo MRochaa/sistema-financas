@@ -13,7 +13,6 @@ import Contributions from './pages/Contributions';
 import Wishlist from './pages/Wishlist';
 import Savings from './pages/Savings';
 import Simulation from './pages/Simulation';
-import ShoppingList from './pages/ShoppingList';
 import Reports from './pages/Reports';
 import Settings from './pages/Settings';
 import Layout from './components/Layout';
@@ -105,13 +104,6 @@ function AppRoutes() {
         <ProtectedRoute>
           <Layout>
             <Simulation />
-          </Layout>
-        </ProtectedRoute>
-      } />
-      <Route path="/shopping-list" element={
-        <ProtectedRoute>
-          <Layout>
-            <ShoppingList />
           </Layout>
         </ProtectedRoute>
       } />

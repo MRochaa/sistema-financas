@@ -1,25 +1,64 @@
 version: '3.8'
 
 services:
-  # Aplicação completa (frontend + backend)
-  app:
-    build: 
-      context: .
-      dockerfile: Dockerfile
-    container_name: sistema-financas
-    environment:
-      # Variáveis do backend
-      DATABASE_URL: ${DATABASE_URL}
-      JWT_SECRET: ${JWT_SECRET}
-      NODE_ENV: production
-      PORT: 3001
-      FRONTEND_URL: ${FRONTEND_URL}
-    ports:
-      - "80:80"  # Nginx serve tudo na porta 80
+  postgres:
+    image: postgres:15-alpine
+    container_name: family-expenses-db
     restart: unless-stopped
-    networks:
-      - coolify
+    environment:
+      POSTGRES_DB: family_expenses
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
-networks:
-  coolify:
-    external: true
+  backend:
+    build: 
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: family-expenses-backend
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/family_expenses?schema=public
+      JWT_SECRET: your-super-secret-jwt-key-change-in-production
+      PORT: 3001
+      NODE_ENV: production
+      FRONTEND_URL: http://localhost:3000
+    ports:
+      - "3001:3001"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - ./backend:/app
+      - /app/node_modules
+    command: >
+      sh -c "
+        npx prisma migrate deploy &&
+        npx prisma generate &&
+        npm run db:seed &&
+        npm start
+      "
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: family-expenses-frontend
+    restart: unless-stopped
+    ports:
+      - "3000:80"
+    depends_on:
+      - backend
+    environment:
+      - VITE_API_URL=http://localhost:3001/api
+
+volumes:
+  postgres_data:
