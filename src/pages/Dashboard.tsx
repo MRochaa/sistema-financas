@@ -152,9 +152,9 @@ const Dashboard: React.FC = () => {
 
     // Category breakdown
     const categoryBreakdown = categories.map(category => {
-      const categoryTransactions = filteredTransactions.filter(t => t.category?.id === category.id);
+      const categoryTransactions = filteredTransactions.filter(t => t.category.id === category.id);
       const amount = categoryTransactions.reduce((sum, t) => sum + t.amount, 0);
-
+      
       return {
         categoryId: category.id,
         _sum: { amount },
@@ -225,15 +225,15 @@ const Dashboard: React.FC = () => {
   };
 
   const expenseCategories = dashboardData.categoryBreakdown.filter(
-    item => item.category && item.category.type === 'EXPENSE'
+    item => item.category.type === 'EXPENSE'
   );
 
   const doughnutChartData = {
-    labels: expenseCategories.map(item => item.category?.name || 'Sem categoria'),
+    labels: expenseCategories.map(item => item.category.name),
     datasets: [
       {
         data: expenseCategories.map(item => item._sum.amount),
-        backgroundColor: expenseCategories.map(item => item.category?.color || '#cccccc'),
+        backgroundColor: expenseCategories.map(item => item.category.color),
         borderWidth: 2,
         borderColor: '#fff',
       },
@@ -500,37 +500,29 @@ const Dashboard: React.FC = () => {
                   <tr key={item.categoryId}>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="flex items-center">
-                        {item.category ? (
-                          <>
-                            <div
-                              className="w-4 h-4 rounded-full mr-3"
-                              style={{ backgroundColor: item.category.color }}
-                            ></div>
-                            <div className="text-sm font-medium text-gray-900">
-                              {item.category.name}
-                            </div>
-                          </>
-                        ) : (
-                          <div className="text-sm font-medium text-gray-400">
-                            Sem categoria
-                          </div>
-                        )}
+                        <div
+                          className="w-4 h-4 rounded-full mr-3"
+                          style={{ backgroundColor: item.category.color }}
+                        ></div>
+                        <div className="text-sm font-medium text-gray-900">
+                          {item.category.name}
+                        </div>
                       </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                        item.category?.type === 'INCOME'
+                        item.category.type === 'INCOME' 
                           ? 'bg-green-100 text-green-800'
                           : 'bg-red-100 text-red-800'
                       }`}>
-                        {item.category?.type === 'INCOME' ? 'Receita' : 'Despesa'}
+                        {item.category.type === 'INCOME' ? 'Receita' : 'Despesa'}
                       </span>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                       {item._count.id}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                      <span className={item.category?.type === 'INCOME' ? 'text-green-600' : 'text-red-600'}>
+                      <span className={item.category.type === 'INCOME' ? 'text-green-600' : 'text-red-600'}>
                         {formatCurrency(item._sum.amount)}
                       </span>
                     </td>

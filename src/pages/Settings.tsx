@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, CreditCard as Edit, Trash2, Settings as SettingsIcon, User, Users, Save, Eye, EyeOff, Shield, Mail, Lock } from 'lucide-react';
+import { Plus, Edit, Trash2, Settings as SettingsIcon, User, Users, Save, Eye, EyeOff, Shield, Mail, Lock } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
-import { authService } from '../services/api';
 import toast from 'react-hot-toast';
 
 interface LinkedUser {
@@ -33,13 +32,20 @@ interface ProfileFormData {
 
 const Settings: React.FC = () => {
   const { user, logout } = useAuth();
-  const [linkedUsers, setLinkedUsers] = useState<LinkedUser[]>([]);
+  const [linkedUsers, setLinkedUsers] = useState<LinkedUser[]>(() => {
+    const saved = localStorage.getItem('linkedUsers');
+    return saved ? JSON.parse(saved) : [];
+  });
   const [showUserModal, setShowUserModal] = useState(false);
   const [editingUser, setEditingUser] = useState<LinkedUser | null>(null);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [activeTab, setActiveTab] = useState<'profile' | 'users' | 'security'>('profile');
 
+  // Save to localStorage whenever data changes
+  useEffect(() => {
+    localStorage.setItem('linkedUsers', JSON.stringify(linkedUsers));
+  }, [linkedUsers]);
 
   const [userFormData, setUserFormData] = useState<UserFormData>({
     name: '',
@@ -87,53 +93,44 @@ const Settings: React.FC = () => {
     }));
   };
 
-  const handleCreateUser = async (e: React.FormEvent) => {
+  const handleCreateUser = (e: React.FormEvent) => {
     e.preventDefault();
-
+    
     // Validations
     if (userFormData.password !== userFormData.confirmPassword) {
       toast.error('As senhas não coincidem');
       return;
     }
 
-    if (userFormData.password.length < 8) {
-      toast.error('A senha deve ter pelo menos 8 caracteres');
+    if (userFormData.password.length < 6) {
+      toast.error('A senha deve ter pelo menos 6 caracteres');
       return;
     }
 
-    // Check if email already exists locally
-    const emailExists = linkedUsers.some(u => u.email === userFormData.email) ||
+    // Check if email already exists
+    const emailExists = linkedUsers.some(u => u.email === userFormData.email) || 
                        user?.email === userFormData.email;
-
+    
     if (emailExists) {
       toast.error('Este e-mail já está em uso');
       return;
     }
 
-    try {
-      // Create user in the backend
-      await authService.register(userFormData.email, userFormData.password, userFormData.name);
+    const newUser: LinkedUser = {
+      id: Date.now().toString(),
+      name: userFormData.name,
+      email: userFormData.email,
+      role: userFormData.role,
+      isActive: true,
+      createdBy: user?.name || 'Admin',
+      createdAt: new Date().toISOString()
+    };
 
-      const newUser: LinkedUser = {
-        id: Date.now().toString(),
-        name: userFormData.name,
-        email: userFormData.email,
-        role: userFormData.role,
-        isActive: true,
-        createdBy: user?.name || 'Admin',
-        createdAt: new Date().toISOString()
-      };
-
-      setLinkedUsers(prev => [...prev, newUser]);
-      setShowUserModal(false);
-      setEditingUser(null);
-      resetUserForm();
-      toast.success('Usuário criado com sucesso! Agora ele pode fazer login.');
-    } catch (error: any) {
-      console.error('Error creating user:', error);
-      const message = error.response?.data?.error || 'Erro ao criar usuário';
-      toast.error(message);
-    }
+    setLinkedUsers(prev => [...prev, newUser]);
+    setShowUserModal(false);
+    setEditingUser(null);
+    resetUserForm();
+    toast.success('Usuário criado com sucesso');
   };
 
   const handleUpdateUser = (e: React.FormEvent) => {
@@ -213,8 +210,8 @@ const Settings: React.FC = () => {
       return;
     }
 
-    if (profileFormData.newPassword && profileFormData.newPassword.length < 8) {
-      toast.error('A nova senha deve ter pelo menos 8 caracteres');
+    if (profileFormData.newPassword && profileFormData.newPassword.length < 6) {
+      toast.error('A nova senha deve ter pelo menos 6 caracteres');
       return;
     }
 
@@ -351,7 +348,7 @@ const Settings: React.FC = () => {
                           className="w-full border border-gray-300 rounded-md px-3 py-2"
                           value={profileFormData.newPassword}
                           onChange={(e) => setProfileFormData({ ...profileFormData, newPassword: e.target.value })}
-                          placeholder="Nova senha (mín. 8 caracteres)"
+                          placeholder="Nova senha (mín. 6 caracteres)"
                         />
                       </div>
 
@@ -532,7 +529,23 @@ const Settings: React.FC = () => {
                     <div className="space-x-3">
                       <button
                         onClick={() => {
-                          toast.info('Fun\u00e7\u00e3o de backup em desenvolvimento. Todos os dados est\u00e3o seguros no banco de dados.');
+                          const data = {
+                            categories: localStorage.getItem('categories'),
+                            transactions: localStorage.getItem('transactions'),
+                            linkedUsers: localStorage.getItem('linkedUsers'),
+                            savingsAccounts: localStorage.getItem('savingsAccounts'),
+                            contributions: localStorage.getItem('contributions'),
+                            wishlists: localStorage.getItem('wishlists'),
+                            simulatedTransactions: localStorage.getItem('simulatedTransactions')
+                          };
+                          const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+                          const url = URL.createObjectURL(blob);
+                          const a = document.createElement('a');
+                          a.href = url;
+                          a.download = `backup-financas-${new Date().toISOString().split('T')[0]}.json`;
+                          a.click();
+                          URL.revokeObjectURL(url);
+                          toast.success('Backup criado com sucesso');
                         }}
                         className="inline-flex items-center px-4 py-2 border border-blue-300 rounded-md shadow-sm text-sm font-medium text-blue-700 bg-white hover:bg-blue-50 transition-colors"
                       >
@@ -626,7 +639,7 @@ const Settings: React.FC = () => {
                           className="w-full border border-gray-300 rounded-md px-3 py-2 pr-10"
                           value={userFormData.password}
                           onChange={(e) => setUserFormData({ ...userFormData, password: e.target.value })}
-                          placeholder="Mínimo 8 caracteres"
+                          placeholder="Mínimo 6 caracteres"
                         />
                         <button
                           type="button"

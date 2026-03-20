@@ -1,8 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, CreditCard as Edit, Trash2, PiggyBank, TrendingUp, Users, Calculator, Target, Percent } from 'lucide-react';
+import { Plus, Edit, Trash2, PiggyBank, TrendingUp, Users, Calculator, Target, Percent } from 'lucide-react';
 import { useData } from '../contexts/DataContext';
-import { savingsService } from '../services/api';
-import toast from 'react-hot-toast';
 
 interface SavingsAccount {
   id: string;
@@ -26,45 +24,27 @@ interface SavingsContribution {
 }
 
 const Savings: React.FC = () => {
-  const { addCategory, deleteCategory, user } = useData();
-  const [savingsAccounts, setSavingsAccounts] = useState<SavingsAccount[]>([]);
-  const [contributions, setContributions] = useState<SavingsContribution[]>([]);
+  const { categories, transactions, addCategory, deleteCategory, user } = useData();
+  const [savingsAccounts, setSavingsAccounts] = useState<SavingsAccount[]>(() => {
+    const saved = localStorage.getItem('savingsAccounts');
+    return saved ? JSON.parse(saved) : [];
+  });
+  const [contributions, setContributions] = useState<SavingsContribution[]>(() => {
+    const saved = localStorage.getItem('contributions');
+    return saved ? JSON.parse(saved) : [];
+  });
   const [showModal, setShowModal] = useState(false);
   const [editingAccount, setEditingAccount] = useState<SavingsAccount | null>(null);
   const [selectedAccount, setSelectedAccount] = useState<string>('');
-  const [loading, setLoading] = useState(true);
+  
+  // Save to localStorage whenever data changes
+  useEffect(() => {
+    localStorage.setItem('savingsAccounts', JSON.stringify(savingsAccounts));
+  }, [savingsAccounts]);
 
   useEffect(() => {
-    loadAccounts();
-
-    // Listen for transaction changes to reload savings
-    const handleTransactionChange = () => {
-      loadAccounts();
-    };
-
-    window.addEventListener('transactionCreated', handleTransactionChange);
-    window.addEventListener('transactionDeleted', handleTransactionChange);
-
-    return () => {
-      window.removeEventListener('transactionCreated', handleTransactionChange);
-      window.removeEventListener('transactionDeleted', handleTransactionChange);
-    };
-  }, []);
-
-  const loadAccounts = async () => {
-    try {
-      setLoading(true);
-      const accounts = await savingsService.getAccounts();
-      setSavingsAccounts(accounts);
-      const allContributions = accounts.flatMap(acc => acc.contributions || []);
-      setContributions(allContributions);
-    } catch (error: any) {
-      console.error('Error loading savings accounts:', error);
-      toast.error('Erro ao carregar contas de poupança');
-    } finally {
-      setLoading(false);
-    }
-  };
+    localStorage.setItem('contributions', JSON.stringify(contributions));
+  }, [contributions]);
 
   const [formData, setFormData] = useState({
     name: '',
@@ -81,6 +61,39 @@ const Savings: React.FC = () => {
     }).format(value);
   };
 
+  // Monitor transactions to automatically add contributions
+  useEffect(() => {
+    const savingsCategories = categories.filter(cat => 
+      cat.name.startsWith('Poupança:') && cat.type === 'EXPENSE'
+    );
+
+    // Clear existing auto-generated contributions to avoid duplicates
+    const manualContributions = contributions.filter(c => !c.transactionId);
+    const newContributions: SavingsContribution[] = [...manualContributions];
+
+    savingsCategories.forEach(category => {
+      const savingsAccount = savingsAccounts.find(acc => acc.categoryId === category.id);
+      if (!savingsAccount) return;
+
+      const relatedTransactions = transactions.filter(t => 
+        t.category.id === category.id && t.type === 'EXPENSE'
+      );
+
+      relatedTransactions.forEach(transaction => {
+        newContributions.push({
+          id: `contrib-${transaction.id}`,
+          savingsId: savingsAccount.id,
+          amount: transaction.amount,
+          contributedBy: transaction.user.name,
+          date: transaction.date,
+          transactionId: transaction.id
+        });
+      });
+    });
+
+    setContributions(newContributions);
+  }, [transactions, categories, savingsAccounts]);
+
   const resetForm = () => {
     setFormData({
       name: '',
@@ -93,43 +106,41 @@ const Savings: React.FC = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    // Create corresponding category
+    const categoryName = `Poupança: ${formData.name}`;
+    const categoryData = {
+      name: categoryName,
+      type: 'EXPENSE' as const,
+      color: '#10B981' // Green color for savings
+    };
 
-    try {
-      const categoryName = `Poupança: ${formData.name}`;
-      const categoryData = {
-        name: categoryName,
-        type: 'EXPENSE' as const,
-        color: '#10B981'
-      };
-
-      const createdCategory = addCategory(categoryData);
-
-      const accountData = {
-        name: formData.name,
-        description: formData.description || undefined,
-        targetAmount: formData.targetAmount ? parseFloat(formData.targetAmount) : undefined,
-        interestRate: parseFloat(formData.interestRate),
-        interestType: formData.interestType,
-        categoryId: createdCategory?.id
-      };
-
-      if (editingAccount) {
-        const updated = await savingsService.updateAccount(editingAccount.id, accountData);
-        setSavingsAccounts(prev => prev.map(acc => acc.id === editingAccount.id ? updated : acc));
-        toast.success('Poupança atualizada com sucesso');
-      } else {
-        const created = await savingsService.createAccount(accountData);
-        setSavingsAccounts(prev => [...prev, created]);
-        toast.success('Poupança criada com sucesso');
-      }
-
-      setShowModal(false);
-      setEditingAccount(null);
-      resetForm();
-    } catch (error: any) {
-      console.error('Error saving account:', error);
-      toast.error('Erro ao salvar poupança');
+    // Create category and get the result
+    const createdCategory = addCategory(categoryData);
+    
+    const newAccount: SavingsAccount = {
+      id: editingAccount?.id || Date.now().toString(),
+      name: formData.name,
+      description: formData.description || undefined,
+      targetAmount: formData.targetAmount ? parseFloat(formData.targetAmount) : undefined,
+      interestRate: parseFloat(formData.interestRate),
+      interestType: formData.interestType,
+      createdBy: user?.name || 'Usuário',
+      createdAt: editingAccount?.createdAt || new Date().toISOString(),
+      categoryId: createdCategory?.id
+    };
+    
+    if (editingAccount) {
+      setSavingsAccounts(prev => prev.map(acc => 
+        acc.id === editingAccount.id ? newAccount : acc
+      ));
+    } else {
+      setSavingsAccounts(prev => [...prev, newAccount]);
     }
+    
+    setShowModal(false);
+    setEditingAccount(null);
+    resetForm();
   };
 
   const handleEdit = (account: SavingsAccount) => {
@@ -144,23 +155,20 @@ const Savings: React.FC = () => {
     setShowModal(true);
   };
 
-  const handleDelete = async (id: string) => {
+  const handleDelete = (id: string) => {
     if (window.confirm('Tem certeza que deseja excluir esta poupança? Isso também removerá a categoria associada.')) {
-      try {
-        const account = savingsAccounts.find(acc => acc.id === id);
-
-        await savingsService.deleteAccount(id);
-        setSavingsAccounts(prev => prev.filter(acc => acc.id !== id));
-        setContributions(prev => prev.filter(contrib => contrib.savingsId !== id));
-
-        if (account && account.categoryId) {
-          deleteCategory(account.categoryId);
-        }
-
-        toast.success('Poupança excluída com sucesso');
-      } catch (error: any) {
-        console.error('Error deleting account:', error);
-        toast.error('Erro ao excluir poupança');
+      // Find the account to get category info
+      const account = savingsAccounts.find(acc => acc.id === id);
+      
+      // Remove the account
+      setSavingsAccounts(prev => prev.filter(acc => acc.id !== id));
+      
+      // Remove associated contributions
+      setContributions(prev => prev.filter(contrib => contrib.savingsId !== id));
+      
+      // Remove associated category if it exists
+      if (account && account.categoryId) {
+        deleteCategory(account.categoryId);
       }
     }
   };
@@ -236,14 +244,6 @@ const Savings: React.FC = () => {
   const getTotalEarnings = () => {
     return getTotalSavings() - getTotalInvested();
   };
-
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <div className="text-gray-500">Carregando...</div>
-      </div>
-    );
-  }
 
   return (
     <div className="space-y-6">

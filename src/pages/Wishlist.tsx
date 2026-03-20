@@ -1,8 +1,6 @@
-import React, { useState, useEffect } from 'react';
-import { Plus, CreditCard as Edit, Trash2, Heart, ExternalLink, Check, X, GripVertical, ChevronDown, ChevronUp } from 'lucide-react';
+import React, { useState } from 'react';
+import { Plus, Edit, Trash2, Heart, ExternalLink, Check, X, GripVertical, ChevronDown, ChevronUp } from 'lucide-react';
 import { useData } from '../contexts/DataContext';
-import { wishlistService } from '../services/api';
-import toast from 'react-hot-toast';
 
 interface WishlistItem {
   id: string;
@@ -27,7 +25,10 @@ interface Wishlist {
 
 const Wishlist: React.FC = () => {
   const { user } = useData();
-  const [wishlists, setWishlists] = useState<Wishlist[]>([]);
+  const [wishlists, setWishlists] = useState<Wishlist[]>(() => {
+    const saved = localStorage.getItem('wishlists');
+    return saved ? JSON.parse(saved) : [];
+  });
   const [showListModal, setShowListModal] = useState(false);
   const [showItemModal, setShowItemModal] = useState(false);
   const [editingList, setEditingList] = useState<Wishlist | null>(null);
@@ -35,24 +36,11 @@ const Wishlist: React.FC = () => {
   const [selectedListId, setSelectedListId] = useState<string>('');
   const [expandedLists, setExpandedLists] = useState<Set<string>>(new Set());
   const [draggedItem, setDraggedItem] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
 
+  // Save to localStorage whenever data changes
   useEffect(() => {
-    loadWishlists();
-  }, []);
-
-  const loadWishlists = async () => {
-    try {
-      setLoading(true);
-      const data = await wishlistService.getAll();
-      setWishlists(data);
-    } catch (error: any) {
-      console.error('Error loading wishlists:', error);
-      toast.error('Erro ao carregar listas de desejos');
-    } finally {
-      setLoading(false);
-    }
-  };
+    localStorage.setItem('wishlists', JSON.stringify(wishlists));
+  }, [wishlists]);
 
   const [listFormData, setListFormData] = useState({
     name: '',
@@ -73,162 +61,128 @@ const Wishlist: React.FC = () => {
     }).format(value);
   };
 
-  const handleCreateList = async (e: React.FormEvent) => {
+  const handleCreateList = (e: React.FormEvent) => {
     e.preventDefault();
+    
+    const newList: Wishlist = {
+      id: Date.now().toString(),
+      name: listFormData.name,
+      description: listFormData.description,
+      items: [],
+      createdBy: user?.name || 'Usuário',
+      createdAt: new Date().toISOString()
+    };
 
-    try {
-      const newList = await wishlistService.create({
-        name: listFormData.name,
-        description: listFormData.description
-      });
-
-      setWishlists(prev => [...prev, newList]);
-      setShowListModal(false);
-      setEditingList(null);
-      resetListForm();
-      toast.success('Lista criada com sucesso!');
-    } catch (error: any) {
-      console.error('Error creating list:', error);
-      toast.error('Erro ao criar lista');
-    }
+    setWishlists(prev => [...prev, newList]);
+    setShowListModal(false);
+    setEditingList(null);
+    resetListForm();
   };
 
-  const handleUpdateList = async (e: React.FormEvent) => {
+  const handleUpdateList = (e: React.FormEvent) => {
     e.preventDefault();
-
+    
     if (!editingList) return;
 
-    try {
-      const updatedList = await wishlistService.update(editingList.id, {
-        name: listFormData.name,
-        description: listFormData.description
-      });
-
-      setWishlists(prev => prev.map(list =>
-        list.id === editingList.id ? updatedList : list
-      ));
-
-      setShowListModal(false);
-      setEditingList(null);
-      resetListForm();
-      toast.success('Lista atualizada com sucesso!');
-    } catch (error: any) {
-      console.error('Error updating list:', error);
-      toast.error('Erro ao atualizar lista');
-    }
+    setWishlists(prev => prev.map(list => 
+      list.id === editingList.id 
+        ? { ...list, name: listFormData.name, description: listFormData.description }
+        : list
+    ));
+    
+    setShowListModal(false);
+    setEditingList(null);
+    resetListForm();
   };
 
-  const handleDeleteList = async (listId: string) => {
+  const handleDeleteList = (listId: string) => {
     if (window.confirm('Tem certeza que deseja excluir esta lista de desejos?')) {
-      try {
-        await wishlistService.delete(listId);
-        setWishlists(prev => prev.filter(list => list.id !== listId));
-        toast.success('Lista excluída com sucesso!');
-      } catch (error: any) {
-        console.error('Error deleting list:', error);
-        toast.error('Erro ao excluir lista');
-      }
+      setWishlists(prev => prev.filter(list => list.id !== listId));
     }
   };
 
-  const handleCreateItem = async (e: React.FormEvent) => {
+  const handleCreateItem = (e: React.FormEvent) => {
     e.preventDefault();
-
+    
     if (!selectedListId) return;
 
-    try {
-      const newItem = await wishlistService.createItem(selectedListId, {
-        name: itemFormData.name,
-        price: itemFormData.price ? parseFloat(itemFormData.price) : undefined,
-        image: itemFormData.image || undefined,
-        link: itemFormData.link || undefined
-      });
+    const targetList = wishlists.find(list => list.id === selectedListId);
+    if (!targetList) return;
 
-      setWishlists(prev => prev.map(list =>
-        list.id === selectedListId
-          ? { ...list, items: [...list.items, newItem] }
-          : list
-      ));
+    const newItem: WishlistItem = {
+      id: Date.now().toString(),
+      name: itemFormData.name,
+      price: itemFormData.price ? parseFloat(itemFormData.price) : undefined,
+      image: itemFormData.image || undefined,
+      link: itemFormData.link || undefined,
+      approved: false,
+      createdBy: user?.name || 'Usuário',
+      order: targetList.items.length
+    };
 
-      setShowItemModal(false);
-      setEditingItem(null);
-      resetItemForm();
-      toast.success('Item adicionado com sucesso!');
-    } catch (error: any) {
-      console.error('Error creating item:', error);
-      toast.error('Erro ao adicionar item');
-    }
+    setWishlists(prev => prev.map(list => 
+      list.id === selectedListId 
+        ? { ...list, items: [...list.items, newItem] }
+        : list
+    ));
+
+    setShowItemModal(false);
+    setEditingItem(null);
+    resetItemForm();
   };
 
-  const handleUpdateItem = async (e: React.FormEvent) => {
+  const handleUpdateItem = (e: React.FormEvent) => {
     e.preventDefault();
-
+    
     if (!editingItem || !selectedListId) return;
 
-    try {
-      const updatedItem = await wishlistService.updateItem(selectedListId, editingItem.id, {
-        name: itemFormData.name,
-        price: itemFormData.price ? parseFloat(itemFormData.price) : undefined,
-        image: itemFormData.image || undefined,
-        link: itemFormData.link || undefined
-      });
+    setWishlists(prev => prev.map(list => 
+      list.id === selectedListId 
+        ? {
+            ...list,
+            items: list.items.map(item => 
+              item.id === editingItem.id 
+                ? {
+                    ...item,
+                    name: itemFormData.name,
+                    price: itemFormData.price ? parseFloat(itemFormData.price) : undefined,
+                    image: itemFormData.image || undefined,
+                    link: itemFormData.link || undefined
+                  }
+                : item
+            )
+          }
+        : list
+    ));
 
-      setWishlists(prev => prev.map(list =>
-        list.id === selectedListId
-          ? {
-              ...list,
-              items: list.items.map(item =>
-                item.id === editingItem.id ? updatedItem : item
-              )
-            }
-          : list
-      ));
-
-      setShowItemModal(false);
-      setEditingItem(null);
-      resetItemForm();
-      toast.success('Item atualizado com sucesso!');
-    } catch (error: any) {
-      console.error('Error updating item:', error);
-      toast.error('Erro ao atualizar item');
-    }
+    setShowItemModal(false);
+    setEditingItem(null);
+    resetItemForm();
   };
 
-  const handleDeleteItem = async (listId: string, itemId: string) => {
+  const handleDeleteItem = (listId: string, itemId: string) => {
     if (window.confirm('Tem certeza que deseja excluir este item?')) {
-      try {
-        await wishlistService.deleteItem(listId, itemId);
-        setWishlists(prev => prev.map(list =>
-          list.id === listId
-            ? { ...list, items: list.items.filter(item => item.id !== itemId) }
-            : list
-        ));
-        toast.success('Item excluído com sucesso!');
-      } catch (error: any) {
-        console.error('Error deleting item:', error);
-        toast.error('Erro ao excluir item');
-      }
+      setWishlists(prev => prev.map(list => 
+        list.id === listId 
+          ? { ...list, items: list.items.filter(item => item.id !== itemId) }
+          : list
+      ));
     }
   };
 
-  const handleApproveItem = async (listId: string, itemId: string) => {
-    try {
-      const updatedItem = await wishlistService.approveItem(listId, itemId);
-      setWishlists(prev => prev.map(list =>
-        list.id === listId
-          ? {
-              ...list,
-              items: list.items.map(item =>
-                item.id === itemId ? updatedItem : item
-              )
-            }
-          : list
-      ));
-      toast.success(updatedItem.approved ? 'Item aprovado!' : 'Aprovação removida');
-    } catch (error: any) {
-      console.error('Error approving item:', error);
-      toast.error('Erro ao aprovar item');
-    }
+  const handleApproveItem = (listId: string, itemId: string) => {
+    setWishlists(prev => prev.map(list => 
+      list.id === listId 
+        ? {
+            ...list,
+            items: list.items.map(item => 
+              item.id === itemId 
+                ? { ...item, approved: !item.approved, approvedBy: !item.approved ? user?.name : undefined }
+                : item
+            )
+          }
+        : list
+    ));
   };
 
   const handleDragStart = (itemId: string) => {
@@ -239,39 +193,29 @@ const Wishlist: React.FC = () => {
     e.preventDefault();
   };
 
-  const handleDrop = async (e: React.DragEvent, targetItemId: string, listId: string) => {
+  const handleDrop = (e: React.DragEvent, targetItemId: string, listId: string) => {
     e.preventDefault();
-
+    
     if (!draggedItem || draggedItem === targetItemId) return;
 
-    const list = wishlists.find(l => l.id === listId);
-    if (!list) return;
+    setWishlists(prev => prev.map(list => {
+      if (list.id !== listId) return list;
 
-    const items = [...list.items];
-    const draggedIndex = items.findIndex(item => item.id === draggedItem);
-    const targetIndex = items.findIndex(item => item.id === targetItemId);
+      const items = [...list.items];
+      const draggedIndex = items.findIndex(item => item.id === draggedItem);
+      const targetIndex = items.findIndex(item => item.id === targetItemId);
 
-    if (draggedIndex === -1 || targetIndex === -1) return;
+      if (draggedIndex === -1 || targetIndex === -1) return list;
 
-    const [draggedItemObj] = items.splice(draggedIndex, 1);
-    items.splice(targetIndex, 0, draggedItemObj);
+      // Remove dragged item and insert at target position
+      const [draggedItemObj] = items.splice(draggedIndex, 1);
+      items.splice(targetIndex, 0, draggedItemObj);
 
-    const updatedItems = items.map((item, index) => ({ ...item, order: index }));
+      // Update order
+      const updatedItems = items.map((item, index) => ({ ...item, order: index }));
 
-    setWishlists(prev => prev.map(l =>
-      l.id === listId ? { ...l, items: updatedItems } : l
-    ));
-
-    try {
-      await wishlistService.reorderItems(
-        listId,
-        updatedItems.map(item => ({ id: item.id, order: item.order }))
-      );
-    } catch (error: any) {
-      console.error('Error reordering items:', error);
-      toast.error('Erro ao reordenar itens');
-      loadWishlists();
-    }
+      return { ...list, items: updatedItems };
+    }));
 
     setDraggedItem(null);
   };
@@ -326,14 +270,6 @@ const Wishlist: React.FC = () => {
   const getApprovedTotal = (items: WishlistItem[]) => {
     return items.filter(item => item.approved).reduce((total, item) => total + (item.price || 0), 0);
   };
-
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <div className="text-gray-500">Carregando...</div>
-      </div>
-    );
-  }
 
   return (
     <div className="space-y-6">

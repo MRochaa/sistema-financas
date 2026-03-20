@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, CreditCard as Edit, Trash2, ShoppingCart, Check, X, GripVertical, ChevronDown, ChevronUp, Minus } from 'lucide-react';
+import { Plus, Edit, Trash2, ShoppingCart, Check, X, GripVertical, ChevronDown, ChevronUp, Minus } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
-import { shoppingListService } from '../services/api';
 import toast from 'react-hot-toast';
 
 interface ShoppingItem {
@@ -144,35 +143,28 @@ const defaultShoppingItems: Omit<ShoppingItem, 'id' | 'quantity' | 'checked' | '
 
 const ShoppingList: React.FC = () => {
   const { user } = useAuth();
-  const [shoppingLists, setShoppingLists] = useState<ShoppingList[]>([]);
-  const [customItems, setCustomItems] = useState<Omit<ShoppingItem, 'id' | 'quantity' | 'checked' | 'createdBy' | 'order'>[]>([]);
+  const [shoppingLists, setShoppingLists] = useState<ShoppingList[]>(() => {
+    const saved = localStorage.getItem('shoppingLists');
+    return saved ? JSON.parse(saved) : [];
+  });
+  const [customItems, setCustomItems] = useState<Omit<ShoppingItem, 'id' | 'quantity' | 'checked' | 'createdBy' | 'order'>[]>(() => {
+    const saved = localStorage.getItem('customShoppingItems');
+    return saved ? JSON.parse(saved) : [];
+  });
   const [showListModal, setShowListModal] = useState(false);
   const [showItemModal, setShowItemModal] = useState(false);
   const [editingList, setEditingList] = useState<ShoppingList | null>(null);
   const [selectedListId, setSelectedListId] = useState<string>('');
   const [expandedLists, setExpandedLists] = useState<Set<string>>(new Set());
-  const [loading, setLoading] = useState(true);
+
+  // Save to localStorage whenever data changes
+  useEffect(() => {
+    localStorage.setItem('shoppingLists', JSON.stringify(shoppingLists));
+  }, [shoppingLists]);
 
   useEffect(() => {
-    loadData();
-  }, []);
-
-  const loadData = async () => {
-    try {
-      setLoading(true);
-      const [lists, custom] = await Promise.all([
-        shoppingListService.getAll(),
-        shoppingListService.getCustomItems()
-      ]);
-      setShoppingLists(lists);
-      setCustomItems(custom);
-    } catch (error: any) {
-      console.error('Error loading shopping lists:', error);
-      toast.error('Erro ao carregar listas de compras');
-    } finally {
-      setLoading(false);
-    }
-  };
+    localStorage.setItem('customShoppingItems', JSON.stringify(customItems));
+  }, [customItems]);
 
   const [listFormData, setListFormData] = useState({
     name: '',
@@ -193,48 +185,47 @@ const ShoppingList: React.FC = () => {
     setItemFormData({ name: '', category: '', unit: 'unidade' });
   };
 
-  const handleCreateList = async (e: React.FormEvent) => {
+  const handleCreateList = (e: React.FormEvent) => {
     e.preventDefault();
-    try {
-      const newList = await shoppingListService.create({ name: listFormData.name });
-      setShoppingLists(prev => [...prev, newList]);
-      setShowListModal(false);
-      setEditingList(null);
-      resetListForm();
-      toast.success('Lista criada com sucesso');
-    } catch (error: any) {
-      console.error('Error creating list:', error);
-      toast.error('Erro ao criar lista');
-    }
+    
+    const newList: ShoppingList = {
+      id: Date.now().toString(),
+      name: listFormData.name,
+      description: listFormData.description,
+      items: [],
+      createdBy: user?.name || 'Usuário',
+      createdAt: new Date().toISOString(),
+      isActive: true
+    };
+
+    setShoppingLists(prev => [...prev, newList]);
+    setShowListModal(false);
+    setEditingList(null);
+    resetListForm();
+    toast.success('Lista criada com sucesso');
   };
 
-  const handleUpdateList = async (e: React.FormEvent) => {
+  const handleUpdateList = (e: React.FormEvent) => {
     e.preventDefault();
+    
     if (!editingList) return;
 
-    try {
-      const updated = await shoppingListService.update(editingList.id, { name: listFormData.name });
-      setShoppingLists(prev => prev.map(list => list.id === editingList.id ? updated : list));
-      setShowListModal(false);
-      setEditingList(null);
-      resetListForm();
-      toast.success('Lista atualizada com sucesso');
-    } catch (error: any) {
-      console.error('Error updating list:', error);
-      toast.error('Erro ao atualizar lista');
-    }
+    setShoppingLists(prev => prev.map(list => 
+      list.id === editingList.id 
+        ? { ...list, name: listFormData.name, description: listFormData.description }
+        : list
+    ));
+    
+    setShowListModal(false);
+    setEditingList(null);
+    resetListForm();
+    toast.success('Lista atualizada com sucesso');
   };
 
-  const handleDeleteList = async (listId: string) => {
+  const handleDeleteList = (listId: string) => {
     if (window.confirm('Tem certeza que deseja excluir esta lista de compras?')) {
-      try {
-        await shoppingListService.delete(listId);
-        setShoppingLists(prev => prev.filter(list => list.id !== listId));
-        toast.success('Lista excluída com sucesso');
-      } catch (error: any) {
-        console.error('Error deleting list:', error);
-        toast.error('Erro ao excluir lista');
-      }
+      setShoppingLists(prev => prev.filter(list => list.id !== listId));
+      toast.success('Lista excluída com sucesso');
     }
   };
 
@@ -254,100 +245,67 @@ const ShoppingList: React.FC = () => {
     toast.success('Item personalizado criado com sucesso');
   };
 
-  const addItemToList = async (listId: string, itemTemplate: Omit<ShoppingItem, 'id' | 'quantity' | 'checked' | 'createdBy' | 'order'>) => {
-    try {
-      const newItem = await shoppingListService.createItem(listId, {
-        name: itemTemplate.name,
-        quantity: 1,
-        unit: itemTemplate.unit,
-        category: itemTemplate.category,
-        isCustom: itemTemplate.isCustom
-      });
-      setShoppingLists(prev => prev.map(list =>
-        list.id === listId
-          ? { ...list, items: [...list.items, newItem] }
-          : list
-      ));
-      toast.success(`${itemTemplate.name} adicionado à lista`);
-    } catch (error: any) {
-      console.error('Error adding item:', error);
-      toast.error('Erro ao adicionar item');
-    }
+  const addItemToList = (listId: string, itemTemplate: Omit<ShoppingItem, 'id' | 'quantity' | 'checked' | 'createdBy' | 'order'>) => {
+    const targetList = shoppingLists.find(list => list.id === listId);
+    if (!targetList) return;
+
+    const newItem: ShoppingItem = {
+      id: Date.now().toString(),
+      name: itemTemplate.name,
+      category: itemTemplate.category,
+      unit: itemTemplate.unit,
+      quantity: 1,
+      checked: false,
+      isCustom: itemTemplate.isCustom,
+      createdBy: user?.name || 'Usuário',
+      order: targetList.items.length
+    };
+
+    setShoppingLists(prev => prev.map(list => 
+      list.id === listId 
+        ? { ...list, items: [...list.items, newItem] }
+        : list
+    ));
+
+    toast.success(`${itemTemplate.name} adicionado à lista`);
   };
 
-  const updateItemQuantity = async (listId: string, itemId: string, change: number) => {
-    const list = shoppingLists.find(l => l.id === listId);
-    const item = list?.items.find(i => i.id === itemId);
-    if (!item) return;
-
-    const newQuantity = Math.max(0, item.quantity + change);
-
-    if (newQuantity === 0) {
-      await removeItemFromList(listId, itemId);
-      return;
-    }
-
-    try {
-      const updated = await shoppingListService.updateItem(listId, itemId, {
-        name: item.name,
-        quantity: newQuantity,
-        unit: item.unit,
-        category: item.category,
-        checked: item.checked
-      });
-      setShoppingLists(prev => prev.map(l =>
-        l.id === listId
-          ? {
-              ...l,
-              items: l.items.map(i => i.id === itemId ? updated : i)
-            }
-          : l
-      ));
-    } catch (error: any) {
-      console.error('Error updating quantity:', error);
-      toast.error('Erro ao atualizar quantidade');
-    }
+  const updateItemQuantity = (listId: string, itemId: string, change: number) => {
+    setShoppingLists(prev => prev.map(list => 
+      list.id === listId 
+        ? {
+            ...list,
+            items: list.items.map(item => 
+              item.id === itemId 
+                ? { ...item, quantity: Math.max(0, item.quantity + change) }
+                : item
+            ).filter(item => item.quantity > 0) // Remove items with 0 quantity
+          }
+        : list
+    ));
   };
 
-  const toggleItemCheck = async (listId: string, itemId: string) => {
-    const list = shoppingLists.find(l => l.id === listId);
-    const item = list?.items.find(i => i.id === itemId);
-    if (!item) return;
-
-    try {
-      const updated = await shoppingListService.updateItem(listId, itemId, {
-        name: item.name,
-        quantity: item.quantity,
-        unit: item.unit,
-        category: item.category,
-        checked: !item.checked
-      });
-      setShoppingLists(prev => prev.map(l =>
-        l.id === listId
-          ? {
-              ...l,
-              items: l.items.map(i => i.id === itemId ? updated : i)
-            }
-          : l
-      ));
-    } catch (error: any) {
-      console.error('Error toggling item:', error);
-      toast.error('Erro ao atualizar item');
-    }
+  const toggleItemCheck = (listId: string, itemId: string) => {
+    setShoppingLists(prev => prev.map(list => 
+      list.id === listId 
+        ? {
+            ...list,
+            items: list.items.map(item => 
+              item.id === itemId 
+                ? { ...item, checked: !item.checked }
+                : item
+            )
+          }
+        : list
+    ));
   };
 
-  const removeItemFromList = async (listId: string, itemId: string) => {
-    try {
-      await shoppingListService.deleteItem(listId, itemId);
-      setShoppingLists(prev => prev.map(list =>
-        list.id === listId
-          ? { ...list, items: list.items.filter(item => item.id !== itemId) }
-          : list
-      ));
-    } catch (error: any) {
-      console.error('Error removing item:', error);
-      toast.error('Erro ao remover item');
-    }
+  const removeItemFromList = (listId: string, itemId: string) => {
+    setShoppingLists(prev => prev.map(list => 
+      list.id === listId 
+        ? { ...list, items: list.items.filter(item => item.id !== itemId) }
+        : list
+    ));
   };
 
   const editList = (list: ShoppingList) => {
@@ -368,24 +326,14 @@ const ShoppingList: React.FC = () => {
     });
   };
 
-  const clearCheckedItems = async (listId: string) => {
+  const clearCheckedItems = (listId: string) => {
     if (window.confirm('Remover todos os itens marcados da lista?')) {
-      const list = shoppingLists.find(l => l.id === listId);
-      if (!list) return;
-
-      const checkedItems = list.items.filter(item => item.checked);
-      try {
-        await Promise.all(checkedItems.map(item => shoppingListService.deleteItem(listId, item.id)));
-        setShoppingLists(prev => prev.map(l =>
-          l.id === listId
-            ? { ...l, items: l.items.filter(item => !item.checked) }
-            : l
-        ));
-        toast.success('Itens marcados removidos');
-      } catch (error: any) {
-        console.error('Error clearing checked items:', error);
-        toast.error('Erro ao limpar itens');
-      }
+      setShoppingLists(prev => prev.map(list => 
+        list.id === listId 
+          ? { ...list, items: list.items.filter(item => !item.checked) }
+          : list
+      ));
+      toast.success('Itens marcados removidos');
     }
   };
 
@@ -402,14 +350,6 @@ const ShoppingList: React.FC = () => {
   }, {} as Record<string, typeof allAvailableItems>);
 
   const categories = Object.keys(itemsByCategory).sort();
-
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <div className="text-gray-500">Carregando...</div>
-      </div>
-    );
-  }
 
   return (
     <div className="space-y-6">

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Plus, CreditCard as Edit, Trash2, Tag } from 'lucide-react';
+import { Plus, Edit, Trash2, Tag } from 'lucide-react';
 import { useData } from '../contexts/DataContext';
 
 const Categories: React.FC = () => {
@@ -57,8 +57,8 @@ const Categories: React.FC = () => {
   };
 
   const groupedCategories = {
-    INCOME: categories.filter(cat => cat && cat.type === 'INCOME'),
-    EXPENSE: categories.filter(cat => cat && cat.type === 'EXPENSE')
+    INCOME: categories.filter(cat => cat.type === 'INCOME'),
+    EXPENSE: categories.filter(cat => cat.type === 'EXPENSE')
   };
 
   return (
@@ -87,7 +87,7 @@ const Categories: React.FC = () => {
             Categorias de Receita ({groupedCategories.INCOME.length})
           </h3>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {groupedCategories.INCOME.filter(c => c && c.id && c.name).map((category) => (
+            {groupedCategories.INCOME.map((category) => (
               <div key={category.id} className="bg-white p-4 rounded-lg shadow hover:shadow-md transition-shadow">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center space-x-3">
@@ -131,7 +131,7 @@ const Categories: React.FC = () => {
             Categorias de Despesa ({groupedCategories.EXPENSE.length})
           </h3>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {groupedCategories.EXPENSE.filter(c => c && c.id && c.name).map((category) => (
+            {groupedCategories.EXPENSE.map((category) => (
               <div key={category.id} className="bg-white p-4 rounded-lg shadow hover:shadow-md transition-shadow">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center space-x-3">

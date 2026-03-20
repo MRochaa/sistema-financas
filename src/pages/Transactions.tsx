@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Plus, CreditCard as Edit, Trash2, Search, Filter } from 'lucide-react';
+import { Plus, Edit, Trash2, Search, Filter } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { useData } from '../contexts/DataContext';
@@ -25,24 +25,6 @@ const Transactions: React.FC = () => {
     categoryId: '',
     search: ''
   });
-
-  console.log('===========================================');
-  console.log('TRANSACTIONS IN COMPONENT:', transactions.length);
-  console.log('Full transactions array:', JSON.stringify(transactions, null, 2));
-  transactions.forEach((t, idx) => {
-    console.log(`Transaction ${idx}:`, {
-      id: t.id,
-      amount: t.amount,
-      type: t.type,
-      has_category: !!t.category,
-      category_is_object: typeof t.category === 'object',
-      category_id: t.category?.id,
-      category_name: t.category?.name,
-      has_user: !!t.user,
-      user_name: t.user?.name
-    });
-  });
-  console.log('===========================================');
   const [formData, setFormData] = useState<TransactionFormData>({
     type: 'EXPENSE',
     amount: '',
@@ -56,17 +38,15 @@ const Transactions: React.FC = () => {
   });
 
   // Filter transactions based on current filters
-  const filteredTransactions = transactions
-    .filter(t => t && t.id) // Ensure transaction exists
-    .filter(transaction => {
-      const matchesType = !filters.type || transaction.type === filters.type;
-      const matchesCategory = !filters.categoryId || transaction.category?.id === filters.categoryId;
-      const matchesSearch = !filters.search ||
-        transaction.description?.toLowerCase().includes(filters.search.toLowerCase()) ||
-        transaction.category?.name?.toLowerCase().includes(filters.search.toLowerCase());
-
-      return matchesType && matchesCategory && matchesSearch;
-    });
+  const filteredTransactions = transactions.filter(transaction => {
+    const matchesType = !filters.type || transaction.type === filters.type;
+    const matchesCategory = !filters.categoryId || transaction.category.id === filters.categoryId;
+    const matchesSearch = !filters.search || 
+      transaction.description?.toLowerCase().includes(filters.search.toLowerCase()) ||
+      transaction.category.name.toLowerCase().includes(filters.search.toLowerCase());
+    
+    return matchesType && matchesCategory && matchesSearch;
+  });
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -108,7 +88,7 @@ const Transactions: React.FC = () => {
       amount: transaction.amount.toString(),
       description: transaction.description || '',
       date: new Date(transaction.date).toISOString().split('T')[0],
-      categoryId: transaction.category?.id || '',
+      categoryId: transaction.category.id,
       recurrenceType: 'SINGLE',
       recurrenceInterval: 'MONTHLY',
       endDate: '',
@@ -147,10 +127,6 @@ const Transactions: React.FC = () => {
   const getFilteredCategories = () => {
     return categories.filter(cat => cat.type === formData.type);
   };
-
-  if (transactions.some(t => !t.category)) {
-    console.warn('Found transactions without category:', transactions.filter(t => !t.category));
-  }
 
   return (
     <div className="space-y-6">
@@ -210,7 +186,7 @@ const Transactions: React.FC = () => {
               onChange={(e) => setFilters({ ...filters, categoryId: e.target.value })}
             >
               <option value="">Todas</option>
-              {categories.filter(c => c && c.id && c.name).map((category) => (
+              {categories.map((category) => (
                 <option key={category.id} value={category.id}>
                   {category.name}
                 </option>
@@ -259,13 +235,7 @@ const Transactions: React.FC = () => {
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
-              {filteredTransactions.map((transaction) => {
-                console.log('=== TRANSACTION DEBUG ===');
-                console.log('Full transaction:', JSON.stringify(transaction, null, 2));
-                console.log('Has category?', !!transaction.category);
-                console.log('Category:', transaction.category);
-                console.log('========================');
-                return (
+              {filteredTransactions.map((transaction) => (
                 <tr key={transaction.id} className="hover:bg-gray-50">
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                     {format(new Date(transaction.date), 'dd/MM/yyyy', { locale: ptBR })}
@@ -275,17 +245,11 @@ const Transactions: React.FC = () => {
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                     <div className="flex items-center">
-                      {transaction.category ? (
-                        <>
-                          <div
-                            className="w-3 h-3 rounded-full mr-2"
-                            style={{ backgroundColor: transaction.category.color }}
-                          ></div>
-                          {transaction.category.name}
-                        </>
-                      ) : (
-                        <span className="text-gray-400">Sem categoria</span>
-                      )}
+                      <div
+                        className="w-3 h-3 rounded-full mr-2"
+                        style={{ backgroundColor: transaction.category.color }}
+                      ></div>
+                      {transaction.category.name}
                     </div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
@@ -303,7 +267,7 @@ const Transactions: React.FC = () => {
                     </span>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                    {transaction.user?.name || '-'}
+                    {transaction.user.name}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                     <button
@@ -320,8 +284,7 @@ const Transactions: React.FC = () => {
                     </button>
                   </td>
                 </tr>
-              );
-              })}
+              ))}
             </tbody>
           </table>
           {filteredTransactions.length === 0 && (
@@ -371,7 +334,7 @@ const Transactions: React.FC = () => {
                     onChange={(e) => setFormData({ ...formData, categoryId: e.target.value })}
                   >
                     <option value="">Selecione uma categoria</option>
-                    {getFilteredCategories().filter(c => c && c.id && c.name).map((category) => (
+                    {getFilteredCategories().map((category) => (
                       <option key={category.id} value={category.id}>
                         {category.name}
                       </option>

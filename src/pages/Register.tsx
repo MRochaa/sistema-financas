@@ -22,14 +22,9 @@ const Register: React.FC = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-
+    
     if (formData.password !== formData.confirmPassword) {
       alert('As senhas não coincidem!');
-      return;
-    }
-
-    if (formData.password.length < 8) {
-      alert('A senha deve ter pelo menos 8 caracteres!');
       return;
     }
 
@@ -125,7 +120,7 @@ const Register: React.FC = () => {
                   autoComplete="new-password"
                   required
                   className="appearance-none relative block w-full px-12 py-3 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm"
-                  placeholder="Sua senha (mín. 8 caracteres)"
+                  placeholder="Sua senha"
                   value={formData.password}
                   onChange={handleChange}
                 />

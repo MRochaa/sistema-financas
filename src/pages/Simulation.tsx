@@ -1,10 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, CreditCard as Edit, Trash2, Calculator, Calendar, Repeat, RotateCcw, TrendingUp, TrendingDown } from 'lucide-react';
+import { Plus, Edit, Trash2, Calculator, Calendar, Repeat, RotateCcw, TrendingUp, TrendingDown } from 'lucide-react';
 import { format, addMonths, addDays } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { useData } from '../contexts/DataContext';
-import { simulationService } from '../services/api';
-import toast from 'react-hot-toast';
 
 interface SimulatedTransaction {
   id: string;
@@ -36,27 +34,17 @@ interface GeneratedTransaction {
 
 const Simulation: React.FC = () => {
   const { categories, transactions, user } = useData();
-  const [simulatedTransactions, setSimulatedTransactions] = useState<SimulatedTransaction[]>([]);
+  const [simulatedTransactions, setSimulatedTransactions] = useState<SimulatedTransaction[]>(() => {
+    const saved = localStorage.getItem('simulatedTransactions');
+    return saved ? JSON.parse(saved) : [];
+  });
   const [allTransactions, setAllTransactions] = useState<GeneratedTransaction[]>([]);
-  const [simulationPeriod, setSimulationPeriod] = useState(12);
-  const [loading, setLoading] = useState(true);
-
+  const [simulationPeriod, setSimulationPeriod] = useState(12); // meses
+  
+  // Save to localStorage whenever data changes
   useEffect(() => {
-    loadSimulations();
-  }, []);
-
-  const loadSimulations = async () => {
-    try {
-      setLoading(true);
-      const simulations = await simulationService.getAll();
-      setSimulatedTransactions(simulations);
-    } catch (error: any) {
-      console.error('Error loading simulations:', error);
-      toast.error('Erro ao carregar simulações');
-    } finally {
-      setLoading(false);
-    }
-  };
+    localStorage.setItem('simulatedTransactions', JSON.stringify(simulatedTransactions));
+  }, [simulatedTransactions]);
 
   // Quick form state
   const [quickForm, setQuickForm] = useState({
@@ -112,7 +100,7 @@ const Simulation: React.FC = () => {
           type: transaction.type,
           amount: transaction.amount,
           description: transaction.description || 'Sem descrição',
-          categoryId: transaction.category?.id || '',
+          categoryId: transaction.category.id,
           date: transaction.date,
           isSimulated: false
         });
@@ -177,37 +165,38 @@ const Simulation: React.FC = () => {
     setAllTransactions(generated);
   };
 
-  const handleQuickSubmit = async (e: React.FormEvent) => {
+  const handleQuickSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    
+    const newTransaction: SimulatedTransaction = {
+      id: Date.now().toString(),
+      type: quickForm.type,
+      amount: parseFloat(quickForm.amount),
+      description: quickForm.description,
+      categoryId: quickForm.categoryId,
+      startDate: quickForm.startDate,
+      recurrenceType: quickForm.recurrenceType,
+      recurrenceInterval: quickForm.recurrenceType !== 'SINGLE' ? quickForm.recurrenceInterval : undefined,
+      endDate: quickForm.endDate || undefined,
+      installments: quickForm.recurrenceType === 'INSTALLMENTS' ? parseInt(quickForm.installments) : undefined,
+      isActive: true,
+      createdBy: user?.name || 'Usuário'
+    };
 
-    try {
-      const newTransaction = await simulationService.create({
-        type: quickForm.type,
-        amount: parseFloat(quickForm.amount),
-        description: quickForm.description,
-        date: quickForm.startDate,
-        categoryId: quickForm.categoryId
-      });
-
-      setSimulatedTransactions(prev => [...prev, newTransaction]);
-
-      setQuickForm({
-        type: 'EXPENSE',
-        amount: '',
-        description: '',
-        categoryId: '',
-        startDate: new Date().toISOString().split('T')[0],
-        recurrenceType: 'SINGLE',
-        recurrenceInterval: 'MONTHLY',
-        endDate: '',
-        installments: ''
-      });
-
-      toast.success('Simulação adicionada');
-    } catch (error: any) {
-      console.error('Error creating simulation:', error);
-      toast.error('Erro ao criar simulação');
-    }
+    setSimulatedTransactions(prev => [...prev, newTransaction]);
+    
+    // Reset quick form
+    setQuickForm({
+      type: 'EXPENSE',
+      amount: '',
+      description: '',
+      categoryId: '',
+      startDate: new Date().toISOString().split('T')[0],
+      recurrenceType: 'SINGLE',
+      recurrenceInterval: 'MONTHLY',
+      endDate: '',
+      installments: ''
+    });
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -257,16 +246,9 @@ const Simulation: React.FC = () => {
     setShowModal(true);
   };
 
-  const handleDelete = async (id: string) => {
+  const handleDelete = (id: string) => {
     if (window.confirm('Tem certeza que deseja excluir esta simulação?')) {
-      try {
-        await simulationService.delete(id);
-        setSimulatedTransactions(prev => prev.filter(t => t.id !== id));
-        toast.success('Simulação excluída');
-      } catch (error: any) {
-        console.error('Error deleting simulation:', error);
-        toast.error('Erro ao excluir simulação');
-      }
+      setSimulatedTransactions(prev => prev.filter(t => t.id !== id));
     }
   };
 
@@ -290,16 +272,9 @@ const Simulation: React.FC = () => {
     });
   };
 
-  const clearSimulation = async () => {
+  const clearSimulation = () => {
     if (window.confirm('Tem certeza que deseja limpar todas as simulações?')) {
-      try {
-        await simulationService.deleteAll();
-        setSimulatedTransactions([]);
-        toast.success('Simulações limpas');
-      } catch (error: any) {
-        console.error('Error clearing simulations:', error);
-        toast.error('Erro ao limpar simulações');
-      }
+      setSimulatedTransactions([]);
     }
   };
 
@@ -405,7 +380,7 @@ const Simulation: React.FC = () => {
             >
               <option value="">Categoria</option>
               {categories
-                .filter(cat => cat && cat.type === quickForm.type && cat.id && cat.name)
+                .filter(cat => cat.type === quickForm.type)
                 .map((category) => (
                   <option key={category.id} value={category.id}>
                     {category.name}
@@ -779,7 +754,7 @@ const Simulation: React.FC = () => {
                   >
                     <option value="">Selecione uma categoria</option>
                     {categories
-                      .filter(cat => cat && cat.type === formData.type && cat.id && cat.name)
+                      .filter(cat => cat.type === formData.type)
                       .map((category) => (
                         <option key={category.id} value={category.id}>
                           {category.name}

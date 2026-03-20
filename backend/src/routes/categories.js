@@ -1,108 +1,108 @@
 import express from 'express';
-import db, { dbHelpers } from '../database/sqlite.js';
-import auth from '../middleware/auth.js';
+import { PrismaClient } from '@prisma/client';
+import { authenticateToken } from '../middleware/auth.js';
+import { validateRequest, categorySchema } from '../middleware/validation.js';
 
 const router = express.Router();
+const prisma = new PrismaClient();
 
-router.get('/', auth, async (req, res) => {
+
+// Get all categories
+router.get('/', authenticateToken, async (req, res, next) => {
   try {
-    const categories = db.prepare('SELECT * FROM categories WHERE user_id = ? ORDER BY name').all(req.userId);
-    // Convert type to uppercase for frontend compatibility
-    const normalizedCategories = categories.map(cat => ({
-      ...cat,
-      type: cat.type.toUpperCase()
-    }));
-    res.json(normalizedCategories || []);
+    const categories = await prisma.category.findMany({
+      orderBy: { name: 'asc' }
+    });
+    res.json(categories);
   } catch (error) {
-    console.error('Get categories error:', error);
-    res.status(500).json({ error: 'Error fetching categories' });
+    next(error);
   }
 });
 
-router.post('/', auth, async (req, res) => {
+// Create category
+router.post('/', authenticateToken, validateRequest(categorySchema), async (req, res, next) => {
   try {
-    const { name, type, color, icon } = req.body;
-
-    // Normalize type to lowercase for database
-    const normalizedType = type?.toLowerCase();
-
-    // Validate type
-    if (!normalizedType || !['income', 'expense'].includes(normalizedType)) {
-      return res.status(400).json({ error: 'Invalid category type. Must be "income" or "expense"' });
+    const data = req.body;
+    
+    // Check if category name already exists
+    const existingCategory = await prisma.category.findFirst({
+      where: { 
+        name: {
+          equals: data.name,
+          mode: 'insensitive'
+        }
+      }
+    });
+    
+    if (existingCategory) {
+      return res.status(409).json({ error: 'Category already exists' });
     }
-
-    const categoryId = dbHelpers.generateId();
-    const now = dbHelpers.now();
-
-    db.prepare(`
-      INSERT INTO categories (id, user_id, name, type, color, icon, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(categoryId, req.userId, name, normalizedType, color, icon || '📁', now, now);
-
-    const category = db.prepare('SELECT * FROM categories WHERE id = ?').get(categoryId);
-    // Convert type to uppercase for frontend compatibility
-    const normalizedCategory = { ...category, type: category.type.toUpperCase() };
-    res.status(201).json(normalizedCategory);
+    
+    const category = await prisma.category.create({ data });
+    res.status(201).json(category);
   } catch (error) {
-    console.error('Create category error:', error);
-    res.status(500).json({ error: 'Error creating category' });
+    next(error);
   }
 });
 
-router.put('/:id', auth, async (req, res) => {
+// Update category
+router.put('/:id', authenticateToken, validateRequest(categorySchema), async (req, res, next) => {
   try {
-    const { name, type, color, icon } = req.body;
-
-    // Normalize type to lowercase for database
-    const normalizedType = type?.toLowerCase();
-
-    // Validate required fields
-    if (!name || !normalizedType || !color) {
-      return res.status(400).json({ error: 'Name, type, and color are required fields' });
+    const { id } = req.params;
+    const data = req.body;
+    
+    // Check if category name already exists (excluding current category)
+    const existingCategory = await prisma.category.findFirst({
+      where: { 
+        name: {
+          equals: data.name,
+          mode: 'insensitive'
+        },
+        id: {
+          not: id
+        }
+      }
+    });
+    
+    if (existingCategory) {
+      return res.status(409).json({ error: 'Category name already exists' });
     }
-
-    // Validate type
-    if (!['income', 'expense'].includes(normalizedType)) {
-      return res.status(400).json({ error: 'Invalid category type. Must be "income" or "expense"' });
-    }
-
-    // Ensure icon has a default value if not provided
-    const categoryIcon = icon || '📁';
-
-    const now = dbHelpers.now();
-
-    const result = db.prepare(`
-      UPDATE categories
-      SET name = ?, type = ?, color = ?, icon = ?, updated_at = ?
-      WHERE id = ? AND user_id = ?
-    `).run(name, normalizedType, color, categoryIcon, now, req.params.id, req.userId);
-
-    if (result.changes === 0) {
-      return res.status(404).json({ error: 'Category not found' });
-    }
-
-    const category = db.prepare('SELECT * FROM categories WHERE id = ?').get(req.params.id);
-    // Convert type to uppercase for frontend compatibility
-    const normalizedCategory = { ...category, type: category.type.toUpperCase() };
-    res.json(normalizedCategory);
+    
+    const category = await prisma.category.update({
+      where: { id },
+      data
+    });
+    
+    res.json(category);
   } catch (error) {
-    console.error('Update category error:', error);
-    res.status(500).json({ error: 'Error updating category' });
+    next(error);
   }
 });
 
-router.delete('/:id', auth, async (req, res) => {
+// Delete category
+router.delete('/:id', authenticateToken, async (req, res, next) => {
   try {
-    const result = db.prepare('DELETE FROM categories WHERE id = ? AND user_id = ?').run(req.params.id, req.userId);
-
-    if (result.changes === 0) {
-      return res.status(404).json({ error: 'Category not found' });
+    const { id } = req.params;
+    
+    // Check if category has associated transactions
+    const transactionCount = await prisma.transaction.count({
+      where: { categoryId: id }
+    });
+    
+    if (transactionCount > 0) {
+      return res.status(400).json({ 
+        error: 'Cannot delete category with associated transactions',
+        transactionCount 
+      });
     }
-
-    res.json({ message: 'Category deleted successfully' });
+    
+    await prisma.category.delete({
+      where: { id }
+    });
+    
+    res.status(204).send();
   } catch (error) {
-    console.error('Delete category error:', error);
-    res.status(500).json({ error: 'Error deleting category' });
+    next(error);
   }
 });
 

@@ -1,218 +1,143 @@
-import 'dotenv/config';
-import express from 'express';
-import cors from 'cors';
-import helmet from 'helmet';
-import rateLimit from 'express-rate-limit';
-import path from 'path';
-import { fileURLToPath } from 'url';
-import { dirname } from 'path';
-import fs from 'fs';
-import db from './database/sqlite.js';
-import authRoutes from './routes/auth.js';
-import transactionRoutes from './routes/transactions.js';
-import categoryRoutes from './routes/categories.js';
-import dashboardRoutes from './routes/dashboard.js';
-import wishlistRoutes from './routes/wishlists.js';
-import shoppingListRoutes from './routes/shopping-lists.js';
-import savingsRoutes from './routes/savings.js';
-import simulationsRoutes from './routes/simulations.js';
+// Servidor principal da aplicação
+// Gerencia a inicialização do Express e conexão com banco de dados
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
+const express = require('express');
+const cors = require('cors');
+const dotenv = require('dotenv');
+const { PrismaClient } = require('@prisma/client');
 
+// Carrega variáveis de ambiente
+dotenv.config();
+
+// Inicializa Express e Prisma
 const app = express();
-const PORT = process.env.PORT || 3000;
-
-// ============================================
-// Trust proxy (necessário para Coolify/Nginx)
-// ============================================
-app.set('trust proxy', 1);
-
-// ============================================
-// Security Middleware
-// ============================================
-
-app.use(helmet({
-  contentSecurityPolicy: false,
-  crossOriginEmbedderPolicy: false
-}));
-
-const limiter = rateLimit({
-  windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS) || 15 * 60 * 1000,
-  max: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS) || 100,
-  message: 'Too many requests from this IP, please try again later.',
-  standardHeaders: true,
-  legacyHeaders: false
+const prisma = new PrismaClient({
+  // Configurações para melhor logging em produção
+  log: process.env.NODE_ENV === 'production' 
+    ? ['error', 'warn'] 
+    : ['query', 'info', 'warn', 'error'],
 });
 
-app.use('/api/', limiter);
+// Porta do servidor
+const PORT = process.env.PORT || 3001;
 
+// Middlewares globais
 app.use(cors({
   origin: process.env.FRONTEND_URL || '*',
   credentials: true
 }));
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
 
-app.use(express.json({ limit: '10mb' }));
-app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+// Middleware de logging simples
+app.use((req, res, next) => {
+  console.log(`[${new Date().toISOString()}] ${req.method} ${req.path}`);
+  next();
+});
 
-// ============================================
-// Health Check
-// ============================================
-
-app.get('/health', async (req, res) => {
-  const health = {
+// Rota de health check IMPORTANTE para o Docker
+app.get('/api/health', (req, res) => {
+  res.status(200).json({ 
     status: 'healthy',
     timestamp: new Date().toISOString(),
-    uptime: process.uptime(),
-    environment: process.env.NODE_ENV || 'development',
-    port: PORT,
-    database: 'checking...'
-  };
-
-  try {
-    const result = db.prepare('SELECT COUNT(*) as count FROM users').get();
-    health.database = 'connected';
-    health.dbStatus = 'operational';
-    health.dbType = 'SQLite';
-  } catch (error) {
-    health.database = 'disconnected';
-    health.dbStatus = 'error';
-    health.dbError = error.message;
-  }
-
-  const statusCode = health.database === 'connected' ? 200 : 503;
-  res.status(statusCode).json(health);
+    environment: process.env.NODE_ENV
+  });
 });
 
-// ============================================
-// API Routes
-// ============================================
-
-app.use('/api/auth', authRoutes);
-app.use('/api/transactions', transactionRoutes);
-app.use('/api/categories', categoryRoutes);
-app.use('/api/dashboard', dashboardRoutes);
-app.use('/api/wishlists', wishlistRoutes);
-app.use('/api/shopping-lists', shoppingListRoutes);
-app.use('/api/savings', savingsRoutes);
-app.use('/api/simulations', simulationsRoutes);
-
+// Rota de teste da API
 app.get('/api', (req, res) => {
-  res.json({
-    message: 'Sistema Financeiro API',
-    version: '1.0.0',
-    status: 'operational',
-    database: 'SQLite',
-    endpoints: {
-      health: '/health',
-      auth: {
-        register: 'POST /api/auth/register',
-        login: 'POST /api/auth/login',
-        me: 'GET /api/auth/me'
-      },
-      transactions: {
-        list: 'GET /api/transactions',
-        create: 'POST /api/transactions'
-      },
-      categories: {
-        list: 'GET /api/categories',
-        create: 'POST /api/categories'
-      }
-    }
+  res.json({ 
+    message: 'API do Sistema de Finanças funcionando!',
+    version: '1.0.0'
   });
 });
 
-// ============================================
-// Serve Frontend
-// ============================================
+// Importa e usa as rotas da aplicação
+try {
+  const authRoutes = require('../routes/auth');
+  const accountRoutes = require('../routes/accounts');
+  const transactionRoutes = require('../routes/transactions');
+  const categoryRoutes = require('../routes/categories');
+  const budgetRoutes = require('../routes/budgets');
+  const dashboardRoutes = require('../routes/dashboard');
+  
+  // Registra as rotas
+  app.use('/api/auth', authRoutes);
+  app.use('/api/accounts', accountRoutes);
+  app.use('/api/transactions', transactionRoutes);
+  app.use('/api/categories', categoryRoutes);
+  app.use('/api/budgets', budgetRoutes);
+  app.use('/api/dashboard', dashboardRoutes);
+} catch (error) {
+  console.error('Erro ao carregar rotas:', error);
+  // Continua mesmo se algumas rotas falharem
+}
 
-const publicPath = path.join(__dirname, '../public');
-
-// Serve static files with NO CACHE (temporary for debugging)
-app.use(express.static(publicPath, {
-  maxAge: 0,
-  etag: false,
-  lastModified: false,
-  setHeaders: (res, filePath) => {
-    // NO CACHE for ALL files during debugging
-    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
-    res.setHeader('Pragma', 'no-cache');
-    res.setHeader('Expires', '0');
-  }
-}));
-
-app.get('*', (req, res) => {
-  if (req.path.startsWith('/api')) {
-    return res.status(404).json({ error: 'API endpoint not found' });
-  }
-
-  const indexPath = path.join(publicPath, 'index.html');
-
-  if (fs.existsSync(indexPath)) {
-    // Force no-cache for index.html
-    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
-    res.setHeader('Pragma', 'no-cache');
-    res.setHeader('Expires', '0');
-    res.sendFile(indexPath);
-  } else {
-    res.status(404).json({
-      message: 'Frontend not found',
-      api: '/api'
-    });
-  }
-});
-
-// ============================================
-// Error Handling
-// ============================================
-
+// Middleware de tratamento de erros global
 app.use((err, req, res, next) => {
-  console.error('Error:', err);
+  console.error('Erro:', err);
   res.status(err.status || 500).json({
-    error: err.message || 'Internal server error'
+    error: process.env.NODE_ENV === 'production' 
+      ? 'Erro interno do servidor' 
+      : err.message
   });
 });
 
-// ============================================
-// Server Startup
-// ============================================
-
-const server = app.listen(PORT, '0.0.0.0', () => {
-  console.log('========================================');
-  console.log('✅ SISTEMA FINANCEIRO - SERVIDOR ATIVO');
-  console.log('🗄️  Banco de Dados: SQLite (Local)');
-  console.log('🔌 Porta:', PORT);
-  console.log('🌍 Ambiente:', process.env.NODE_ENV || 'development');
-  console.log('🏥 Health: http://localhost:' + PORT + '/health');
-  console.log('🚀 API: http://localhost:' + PORT + '/api');
-  console.log('========================================');
+// Rota 404 para requisições não encontradas
+app.use('*', (req, res) => {
+  res.status(404).json({ error: 'Rota não encontrada' });
 });
 
-const gracefulShutdown = async (signal) => {
-  console.log(`\n${signal} received, shutting down gracefully...`);
-  server.close(() => {
-    db.close();
-    console.log('Server closed');
-    process.exit(0);
-  });
-
-  setTimeout(() => {
-    console.error('Forcing shutdown after timeout');
-    process.exit(1);
-  }, 10000);
-};
-
-process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
-process.on('SIGINT', () => gracefulShutdown('SIGINT'));
-process.on('uncaughtException', (error) => {
-  console.error('❌ Uncaught Exception:', error);
-  console.error('Stack:', error.stack);
-});
-process.on('unhandledRejection', (error) => {
-  console.error('❌ Unhandled Rejection:', error);
-  if (error instanceof Error) {
-    console.error('Stack:', error.stack);
+// Função para conectar ao banco de dados
+async function connectDatabase() {
+  try {
+    await prisma.$connect();
+    console.log('✅ Conectado ao banco de dados PostgreSQL');
+    return true;
+  } catch (error) {
+    console.error('❌ Erro ao conectar ao banco de dados:', error);
+    // Em produção, tenta reconectar após 5 segundos
+    if (process.env.NODE_ENV === 'production') {
+      console.log('Tentando reconectar em 5 segundos...');
+      setTimeout(connectDatabase, 5000);
+    }
+    return false;
   }
+}
+
+// Inicializa o servidor
+async function startServer() {
+  // Conecta ao banco de dados
+  await connectDatabase();
+  
+  // Inicia o servidor Express
+  app.listen(PORT, '0.0.0.0', () => {
+    console.log('========================================');
+    console.log(`🚀 Servidor rodando na porta ${PORT}`);
+    console.log(`📊 Ambiente: ${process.env.NODE_ENV}`);
+    console.log(`🔗 API disponível em http://localhost:${PORT}/api`);
+    console.log('========================================');
+  });
+}
+
+// Tratamento de sinais para shutdown gracioso
+process.on('SIGTERM', async () => {
+  console.log('SIGTERM recebido, encerrando servidor...');
+  await prisma.$disconnect();
+  process.exit(0);
 });
 
-export default app;
+process.on('SIGINT', async () => {
+  console.log('SIGINT recebido, encerrando servidor...');
+  await prisma.$disconnect();
+  process.exit(0);
+});
+
+// Inicia o servidor
+startServer().catch(error => {
+  console.error('Erro fatal ao iniciar servidor:', error);
+  process.exit(1);
+});
+
+// Exporta app e prisma para uso em outros módulos
+module.exports = { app, prisma };
