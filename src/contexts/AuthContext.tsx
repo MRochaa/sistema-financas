@@ -1,19 +1,23 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
-import axios from 'axios';
+import { createClient } from '@supabase/supabase-js';
 import toast from 'react-hot-toast';
 
-// Security: Input validation schemas
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+
+if (!supabaseUrl || !supabaseAnonKey) {
+  throw new Error('Missing Supabase environment variables');
+}
+
+export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+
 const validateEmail = (email: string): boolean => {
   const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
   return emailRegex.test(email) && email.length <= 254;
 };
 
 const validatePassword = (password: string): boolean => {
-  return password.length >= 8 && password.length <= 128;
-};
-
-const sanitizeInput = (input: string): string => {
-  return input.trim().replace(/[<>]/g, '');
+  return password.length >= 6 && password.length <= 128;
 };
 
 interface User {
@@ -24,7 +28,6 @@ interface User {
 
 interface AuthContextType {
   user: User | null;
-  token: string | null;
   loading: boolean;
   login: (email: string, password: string) => Promise<void>;
   register: (email: string, password: string, name: string) => Promise<void>;
@@ -41,78 +44,63 @@ export const useAuth = () => {
   return context;
 };
 
-// Mock API for demo purposes - replace with real backend
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
-
-// Configure axios defaults
-axios.defaults.baseURL = API_URL;
-axios.defaults.timeout = 10000; // 10 second timeout
-
-// Add request interceptor for security headers
-axios.interceptors.request.use((config) => {
-  config.headers['X-Requested-With'] = 'XMLHttpRequest';
-  return config;
-});
-
-// Add response interceptor for error handling
-axios.interceptors.response.use(
-  (response) => response,
-  (error) => {
-    if (error.response?.status === 401) {
-      localStorage.removeItem('token');
-      localStorage.removeItem('user');
-      window.location.href = '/login';
-    }
-    return Promise.reject(error);
-  }
-);
-
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
-  const [token, setToken] = useState<string | null>(localStorage.getItem('token'));
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // For demo purposes, simulate authentication
-    const demoUser = localStorage.getItem('demoUser');
-    if (demoUser) {
-      setUser(JSON.parse(demoUser));
-    }
-    setLoading(false);
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session?.user) {
+        setUser({
+          id: session.user.id,
+          email: session.user.email || '',
+          name: session.user.user_metadata?.name || session.user.email?.split('@')[0] || 'Usuário'
+        });
+      }
+      setLoading(false);
+    });
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (session?.user) {
+        setUser({
+          id: session.user.id,
+          email: session.user.email || '',
+          name: session.user.user_metadata?.name || session.user.email?.split('@')[0] || 'Usuário'
+        });
+      } else {
+        setUser(null);
+      }
+    });
+
+    return () => subscription.unsubscribe();
   }, []);
 
   const login = async (email: string, password: string) => {
     try {
-      // Input validation
       if (!validateEmail(email)) {
         throw new Error('E-mail inválido');
       }
       if (!validatePassword(password)) {
-        throw new Error('Senha deve ter entre 8 e 128 caracteres');
+        throw new Error('Senha deve ter pelo menos 6 caracteres');
       }
 
-      const sanitizedEmail = sanitizeInput(email);
-      
-      const response = await axios.post('/auth/login', { 
-        email: sanitizedEmail, 
-        password 
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email: email.trim(),
+        password
       });
-      const { user: userData, token: userToken } = response.data;
-      
-      // Validate response data
-      if (!userData || !userToken || !userData.id || !userData.email || !userData.name) {
-        throw new Error('Resposta inválida do servidor');
+
+      if (error) throw error;
+
+      if (data.user) {
+        setUser({
+          id: data.user.id,
+          email: data.user.email || '',
+          name: data.user.user_metadata?.name || data.user.email?.split('@')[0] || 'Usuário'
+        });
+        toast.success(`Bem-vindo, ${data.user.user_metadata?.name || 'Usuário'}!`);
       }
-      
-      localStorage.setItem('token', userToken);
-      localStorage.setItem('user', JSON.stringify(userData));
-      setToken(userToken);
-      setUser(userData);
-      axios.defaults.headers.common['Authorization'] = `Bearer ${userToken}`;
-        
-      toast.success(`Bem-vindo, ${userData.name}!`);
     } catch (error: any) {
-      const message = error.response?.data?.message || error.message || 'Erro ao fazer login';
+      const message = error.message || 'Erro ao fazer login';
       toast.error(message);
       throw error;
     }
@@ -120,58 +108,55 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const register = async (email: string, password: string, name: string) => {
     try {
-      // Input validation
       if (!validateEmail(email)) {
         throw new Error('E-mail inválido');
       }
       if (!validatePassword(password)) {
-        throw new Error('Senha deve ter entre 8 e 128 caracteres');
+        throw new Error('Senha deve ter pelo menos 6 caracteres');
       }
       if (!name || name.length < 2 || name.length > 100) {
         throw new Error('Nome deve ter entre 2 e 100 caracteres');
       }
 
-      const sanitizedEmail = sanitizeInput(email);
-      const sanitizedName = sanitizeInput(name);
-      
-      const response = await axios.post('/auth/register', { 
-        email: sanitizedEmail, 
-        password, 
-        name: sanitizedName 
+      const { data, error } = await supabase.auth.signUp({
+        email: email.trim(),
+        password,
+        options: {
+          data: {
+            name: name.trim()
+          }
+        }
       });
-      const { user: userData, token: userToken } = response.data;
-      
-      // Validate response data
-      if (!userData || !userToken || !userData.id || !userData.email || !userData.name) {
-        throw new Error('Resposta inválida do servidor');
+
+      if (error) throw error;
+
+      if (data.user) {
+        setUser({
+          id: data.user.id,
+          email: data.user.email || '',
+          name: name.trim()
+        });
+        toast.success(`Conta criada com sucesso! Bem-vindo, ${name}!`);
       }
-      
-      localStorage.setItem('token', userToken);
-      localStorage.setItem('user', JSON.stringify(userData));
-      setToken(userToken);
-      setUser(userData);
-      axios.defaults.headers.common['Authorization'] = `Bearer ${userToken}`;
-        
-      toast.success(`Conta criada com sucesso! Bem-vindo, ${userData.name}!`);
     } catch (error: any) {
-      const message = error.response?.data?.message || error.message || 'Erro ao criar conta';
+      const message = error.message || 'Erro ao criar conta';
       toast.error(message);
       throw error;
     }
   };
 
-  const logout = () => {
-    localStorage.removeItem('token');
-    localStorage.removeItem('user');
-    setToken(null);
-    setUser(null);
-    delete axios.defaults.headers.common['Authorization'];
-    toast.success('Logout realizado com sucesso');
+  const logout = async () => {
+    try {
+      await supabase.auth.signOut();
+      setUser(null);
+      toast.success('Logout realizado com sucesso');
+    } catch (error: any) {
+      toast.error('Erro ao fazer logout');
+    }
   };
 
   const value = {
     user,
-    token,
     loading,
     login,
     register,
