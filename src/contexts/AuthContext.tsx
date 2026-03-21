@@ -89,7 +89,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         password
       });
 
-      if (error) throw error;
+      if (error) {
+        if (error.message.includes('Invalid login credentials')) {
+          throw new Error('E-mail ou senha incorretos');
+        }
+        if (error.message.includes('network')) {
+          throw new Error('Erro de conexão. Verifique sua internet');
+        }
+        throw error;
+      }
 
       if (data.user) {
         setUser({
@@ -128,7 +136,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
       });
 
-      if (error) throw error;
+      if (error) {
+        if (error.message.includes('already registered')) {
+          throw new Error('Este e-mail já está cadastrado');
+        }
+        if (error.message.includes('network')) {
+          throw new Error('Erro de conexão. Verifique sua internet');
+        }
+        throw error;
+      }
 
       if (data.user) {
         setUser({
